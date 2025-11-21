@@ -1,0 +1,23 @@
+{
+    "name": "docpilot",
+    "displayName": "DocPilot - Office Document Viewer & Editor",
+    "description": "View and edit Word, Excel, PowerPoint files",
+    "version": "0.0.1",
+    "publisher": "docpilot",
+    "icon": "resources/icon.png",
+    "categories": [
+        "Chat"
+    ],
+    "keywords": [
+        "office",
+        "word",
+        "excel",
+        "powerpoint",
+        "docx",
+        "xlsx",
+        "pptx",
+        "document",
+        "spreadsheet",
+        "presentation"
+    ]
+}
