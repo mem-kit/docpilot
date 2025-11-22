@@ -1,8 +1,10 @@
 import {DocumentEditor} from "@onlyoffice/document-editor-react";
 
 import React, {useRef} from "react";
-import config from "./config";
+import config from "./src/config";
 import "./App.css";
+import FileList from "./src/components/FileList";
+import ChatPanel from "./src/components/ChatPanel";
 
 function onLoadComponentError(errorCode, errorDescription) {
   switch (errorCode) {
@@ -66,6 +68,9 @@ export default function App() {
   const [docEditor, setDocEditor] = React.useState(null);
   const [isEditorReady, setIsEditorReady] = React.useState(false);
   const [isCleaningUp, setIsCleaningUp] = React.useState(false);
+  const [leftPanelVisible, setLeftPanelVisible] = React.useState(true);
+  const [rightPanelVisible, setRightPanelVisible] = React.useState(true);
+  const [mcpConfig, setMcpConfig] = React.useState(null);
   
   // Generate a unique key based on file and timestamp to avoid caching issues
   const documentKey = React.useMemo(() => `${selectedFile}_${Date.now()}`, [selectedFile]);
@@ -130,9 +135,24 @@ export default function App() {
       .then(data => {
         console.log('Available files:', data);
         setFiles(data);
+        // Set first file as default if available
+        if (data.length > 0 && !selectedFile) {
+          setSelectedFile(data[0].title);
+        }
       })
       .catch(err => console.error('Failed to load files:', err));
   }, []);
+
+  // Handle file selection
+  const handleFileSelect = (file) => {
+    setSelectedFile(file.title);
+  };
+
+  // Handle MCP config load
+  const handleLoadMCP = (config) => {
+    setMcpConfig(config);
+    console.log('MCP Config loaded:', config);
+  };
   
   // Handle document ready event
   const onDocumentReady = React.useCallback((event) => {
@@ -383,12 +403,19 @@ export default function App() {
   };
   
   return (
-    <div style={{ width: '100vw', height: '100vh', display: 'flex', flexDirection: 'column' }}>
-      {/* Toolbar with file selector and test buttons */}
-      <div style={{ padding: '10px', background: '#f0f0f0', borderBottom: '1px solid #ccc' }}>
-        {/* SDK Test Buttons Row */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '10px', flexWrap: 'wrap' }}>
-          <div style={{ fontWeight: 'bold', color: '#333', marginRight: '10px' }}>SDK 测试功能：</div>
+    <div className="app-container">
+      {/* Top toolbar */}
+      <div className="app-toolbar">
+        <div className="toolbar-left">
+          <button 
+            onClick={() => setLeftPanelVisible(!leftPanelVisible)}
+            className="toggle-btn"
+            title={leftPanelVisible ? "Hide file list" : "Show file list"}
+          >
+            {leftPanelVisible ? '◀️' : '▶️'} Files
+          </button>
+          <span className="toolbar-separator">|</span>
+          <div style={{ fontWeight: 'bold', color: '#333' }}>SDK 测试功能：</div>
           
           {/* Status indicator */}
           <div style={{ 
@@ -485,64 +512,83 @@ export default function App() {
             </button>
           )}
         </div>
-        
-        {/* File selector row */}
-        {files.length > 0 && (
-          <div style={{ display: 'flex', alignItems: 'center' }}>
-            <label style={{ fontWeight: 'bold', color: '#333' }}>选择文件: </label>
-            <select 
-              value={selectedFile} 
-              onChange={(e) => setSelectedFile(e.target.value)}
-              style={{ padding: '5px 10px', marginLeft: '10px', borderRadius: '4px', border: '1px solid #ccc' }}
-            >
-              {files.map(file => (
-                <option key={file.id} value={file.title}>{file.title}</option>
-              ))}
-            </select>
-          </div>
-        )}
+
+        <div className="toolbar-right">
+          <button 
+            onClick={() => setRightPanelVisible(!rightPanelVisible)}
+            className="toggle-btn"
+            title={rightPanelVisible ? "Hide chat" : "Show chat"}
+          >
+            Chat {rightPanelVisible ? '▶️' : '◀️'}
+          </button>
+        </div>
       </div>
       
-      {/* Document editor */}
-      <div style={{ flex: 1, position: 'relative' }}>
-        {isCleaningUp ? (
-          <div style={{ 
-            width: '100%', 
-            height: '100%', 
-            display: 'flex', 
-            alignItems: 'center', 
-            justifyContent: 'center',
-            fontSize: '16px',
-            color: '#666'
-          }}>
-            🧹 清理中...
+      {/* Main content area with three panels */}
+      <div className="app-content">
+        {/* Left panel - File List */}
+        {leftPanelVisible && (
+          <div className="left-panel">
+            <FileList 
+              onFileSelect={handleFileSelect}
+              selectedFile={selectedFile}
+            />
           </div>
-        ) : (
-          <div key={`editor-wrapper-${documentKey}`} style={{ width: '100%', height: '100%', position: 'absolute' }}>
-            <DocumentEditor
-            key={`${getDocumentType(selectedFile)}-${documentKey}`}
-            ref={docEditorRef}
-            id={editorId}
-            documentServerUrl={config.baseURL}
-            config={{
-              document: {
-                fileType: getFileType(selectedFile),
-                key: documentKey,
-                title: selectedFile,
-                url: `${config.baseURL}example/download?fileName=${selectedFile}`,
-              },
-              documentType: getDocumentType(selectedFile),
-              editorConfig: {
-                mode: "edit",
-                callbackUrl: `${config.baseURL}example/track?filename=${selectedFile}`,
-              },
-            }}
-            events_onDocumentReady={onDocumentReady}
-            events_onError={onError}
-            events_onWarning={onWarning}
-            events_onInfo={onInfo}
-            onLoadComponentError={onLoadComponentError}
-          />
+        )}
+
+        {/* Center panel - Document Editor */}
+        <div className="center-panel">
+          {isCleaningUp ? (
+            <div style={{ 
+              width: '100%', 
+              height: '100%', 
+              display: 'flex', 
+              alignItems: 'center', 
+              justifyContent: 'center',
+              fontSize: '16px',
+              color: '#666'
+            }}>
+              🧹 清理中...
+            </div>
+          ) : (
+            <div key={`editor-wrapper-${documentKey}`} style={{ width: '100%', height: '100%', position: 'absolute' }}>
+              <DocumentEditor
+                key={`${getDocumentType(selectedFile)}-${documentKey}`}
+                ref={docEditorRef}
+                id={editorId}
+                documentServerUrl={config.baseURL}
+                config={{
+                  document: {
+                    fileType: getFileType(selectedFile),
+                    key: documentKey,
+                    title: selectedFile,
+                    url: `${config.baseURL}example/download?fileName=${selectedFile}`,
+                  },
+                  documentType: getDocumentType(selectedFile),
+                  editorConfig: {
+                    mode: "edit",
+                    callbackUrl: `${config.baseURL}example/track?filename=${selectedFile}`,
+                  },
+                }}
+                events_onDocumentReady={onDocumentReady}
+                events_onError={onError}
+                events_onWarning={onWarning}
+                events_onInfo={onInfo}
+                onLoadComponentError={onLoadComponentError}
+              />
+            </div>
+          )}
+        </div>
+
+        {/* Right panel - Chat */}
+        {rightPanelVisible && (
+          <div className="right-panel">
+            <ChatPanel 
+              docEditor={docEditor}
+              isEditorReady={isEditorReady}
+              files={files}
+              onLoadMCP={handleLoadMCP}
+            />
           </div>
         )}
       </div>

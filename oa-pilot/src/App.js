@@ -3,6 +3,8 @@ import {DocumentEditor} from "@onlyoffice/document-editor-react";
 import React, {useRef} from "react";
 import config from "./config";
 import "./App.css";
+import FileList from "./components/FileList";
+import ChatPanel from "./components/ChatPanel";
 
 function onLoadComponentError(errorCode, errorDescription) {
   switch (errorCode) {
@@ -66,6 +68,15 @@ export default function App() {
   const [docEditor, setDocEditor] = React.useState(null);
   const [isEditorReady, setIsEditorReady] = React.useState(false);
   const [isCleaningUp, setIsCleaningUp] = React.useState(false);
+  const [leftPanelVisible, setLeftPanelVisible] = React.useState(true);
+  const [rightPanelVisible, setRightPanelVisible] = React.useState(true);
+  const [mcpConfig, setMcpConfig] = React.useState(null);
+  const [leftPanelWidth, setLeftPanelWidth] = React.useState(280);
+  const [rightPanelWidth, setRightPanelWidth] = React.useState(400);
+  const [isResizingLeft, setIsResizingLeft] = React.useState(false);
+  const [isResizingRight, setIsResizingRight] = React.useState(false);
+  const resizeStartX = useRef(0);
+  const resizeStartWidth = useRef(0);
   
   // Generate a unique key based on file and timestamp to avoid caching issues
   const documentKey = React.useMemo(() => `${selectedFile}_${Date.now()}`, [selectedFile]);
@@ -130,9 +141,74 @@ export default function App() {
       .then(data => {
         console.log('Available files:', data);
         setFiles(data);
+        // Set first file as default if available
+        if (data.length > 0 && !selectedFile) {
+          setSelectedFile(data[0].title);
+        }
       })
       .catch(err => console.error('Failed to load files:', err));
   }, []);
+
+  // Handle file selection
+  const handleFileSelect = (file) => {
+    setSelectedFile(file.title);
+  };
+
+  // Handle MCP config load
+  const handleLoadMCP = (config) => {
+    setMcpConfig(config);
+    console.log('MCP Config loaded:', config);
+  };
+
+  // Handle left panel resize
+  const handleLeftResizeStart = (e) => {
+    e.preventDefault();
+    setIsResizingLeft(true);
+    resizeStartX.current = e.clientX;
+    resizeStartWidth.current = leftPanelWidth;
+  };
+
+  // Handle right panel resize
+  const handleRightResizeStart = (e) => {
+    e.preventDefault();
+    setIsResizingRight(true);
+    resizeStartX.current = e.clientX;
+    resizeStartWidth.current = rightPanelWidth;
+  };
+
+  // Handle mouse move during resize
+  React.useEffect(() => {
+    const handleMouseMove = (e) => {
+      if (isResizingLeft) {
+        const delta = e.clientX - resizeStartX.current;
+        const newWidth = Math.max(200, Math.min(500, resizeStartWidth.current + delta));
+        setLeftPanelWidth(newWidth);
+      } else if (isResizingRight) {
+        const delta = resizeStartX.current - e.clientX;
+        const newWidth = Math.max(300, Math.min(700, resizeStartWidth.current + delta));
+        setRightPanelWidth(newWidth);
+      }
+    };
+
+    const handleMouseUp = () => {
+      setIsResizingLeft(false);
+      setIsResizingRight(false);
+    };
+
+    if (isResizingLeft || isResizingRight) {
+      document.addEventListener('mousemove', handleMouseMove);
+      document.addEventListener('mouseup', handleMouseUp);
+      document.body.style.cursor = 'col-resize';
+      document.body.style.userSelect = 'none';
+    }
+
+    return () => {
+      document.removeEventListener('mousemove', handleMouseMove);
+      document.removeEventListener('mouseup', handleMouseUp);
+      document.body.style.cursor = '';
+      document.body.style.userSelect = '';
+    };
+  }, [isResizingLeft, isResizingRight, leftPanelWidth, rightPanelWidth]);
   
   // Handle document ready event
   const onDocumentReady = React.useCallback((event) => {
@@ -383,12 +459,11 @@ export default function App() {
   };
   
   return (
-    <div style={{ width: '100vw', height: '100vh', display: 'flex', flexDirection: 'column' }}>
-      {/* Toolbar with file selector and test buttons */}
-      <div style={{ padding: '10px', background: '#f0f0f0', borderBottom: '1px solid #ccc' }}>
-        {/* SDK Test Buttons Row */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '10px', flexWrap: 'wrap' }}>
-          <div style={{ fontWeight: 'bold', color: '#333', marginRight: '10px' }}>SDK 测试功能：</div>
+    <div className="app-container">
+      {/* Top toolbar */}
+      <div className="app-toolbar">
+        <div className="toolbar-left">
+          <div style={{ fontWeight: 'bold', color: '#333' }}>SDK 测试功能：</div>
           
           {/* Status indicator */}
           <div style={{ 
@@ -485,64 +560,137 @@ export default function App() {
             </button>
           )}
         </div>
-        
-        {/* File selector row */}
-        {files.length > 0 && (
-          <div style={{ display: 'flex', alignItems: 'center' }}>
-            <label style={{ fontWeight: 'bold', color: '#333' }}>选择文件: </label>
-            <select 
-              value={selectedFile} 
-              onChange={(e) => setSelectedFile(e.target.value)}
-              style={{ padding: '5px 10px', marginLeft: '10px', borderRadius: '4px', border: '1px solid #ccc' }}
-            >
-              {files.map(file => (
-                <option key={file.id} value={file.title}>{file.title}</option>
-              ))}
-            </select>
-          </div>
-        )}
       </div>
       
-      {/* Document editor */}
-      <div style={{ flex: 1, position: 'relative' }}>
-        {isCleaningUp ? (
-          <div style={{ 
-            width: '100%', 
-            height: '100%', 
-            display: 'flex', 
-            alignItems: 'center', 
-            justifyContent: 'center',
-            fontSize: '16px',
-            color: '#666'
-          }}>
-            🧹 清理中...
-          </div>
-        ) : (
-          <div key={`editor-wrapper-${documentKey}`} style={{ width: '100%', height: '100%', position: 'absolute' }}>
-            <DocumentEditor
-            key={`${getDocumentType(selectedFile)}-${documentKey}`}
-            ref={docEditorRef}
-            id={editorId}
-            documentServerUrl={config.baseURL}
-            config={{
-              document: {
-                fileType: getFileType(selectedFile),
-                key: documentKey,
-                title: selectedFile,
-                url: `${config.baseURL}example/download?fileName=${selectedFile}`,
-              },
-              documentType: getDocumentType(selectedFile),
-              editorConfig: {
-                mode: "edit",
-                callbackUrl: `${config.baseURL}example/track?filename=${selectedFile}`,
-              },
-            }}
-            events_onDocumentReady={onDocumentReady}
-            events_onError={onError}
-            events_onWarning={onWarning}
-            events_onInfo={onInfo}
-            onLoadComponentError={onLoadComponentError}
+      {/* Main content area with three panels */}
+      <div className="app-content">
+        {/* Left panel - File List */}
+        <div 
+          className="left-panel" 
+          style={{ 
+            width: leftPanelVisible ? `${leftPanelWidth}px` : '0',
+            minWidth: leftPanelVisible ? `${leftPanelWidth}px` : '0',
+            maxWidth: leftPanelVisible ? `${leftPanelWidth}px` : '0',
+            overflow: leftPanelVisible ? 'visible' : 'hidden',
+            transition: leftPanelVisible ? 'none' : 'all 0.3s ease'
+          }}
+        >
+          <FileList 
+            onFileSelect={handleFileSelect}
+            selectedFile={selectedFile}
           />
+          {leftPanelVisible && (
+            <div className="resize-handle resize-handle-right">
+              <div 
+                className="resize-handle-drag"
+                onMouseDown={handleLeftResizeStart}
+                title="拖拽调整宽度"
+              />
+              <button 
+                className="resize-handle-btn"
+                onClick={() => setLeftPanelVisible(false)}
+                title="隐藏文件列表"
+              >
+                ◀
+              </button>
+            </div>
+          )}
+        </div>
+        {!leftPanelVisible && (
+          <div 
+            className="panel-toggle panel-toggle-left"
+            onClick={() => setLeftPanelVisible(true)}
+            title="显示文件列表"
+          >
+            <span>▶</span>
+          </div>
+        )}
+
+        {/* Center panel - Document Editor */}
+        <div className="center-panel">
+          {isCleaningUp ? (
+            <div style={{ 
+              width: '100%', 
+              height: '100%', 
+              display: 'flex', 
+              alignItems: 'center', 
+              justifyContent: 'center',
+              fontSize: '16px',
+              color: '#666'
+            }}>
+              🧹 清理中...
+            </div>
+          ) : (
+            <div key={`editor-wrapper-${documentKey}`} style={{ width: '100%', height: '100%', position: 'absolute' }}>
+              <DocumentEditor
+                key={`${getDocumentType(selectedFile)}-${documentKey}`}
+                ref={docEditorRef}
+                id={editorId}
+                documentServerUrl={config.baseURL}
+                config={{
+                  document: {
+                    fileType: getFileType(selectedFile),
+                    key: documentKey,
+                    title: selectedFile,
+                    url: `${config.baseURL}example/download?fileName=${selectedFile}`,
+                  },
+                  documentType: getDocumentType(selectedFile),
+                  editorConfig: {
+                    mode: "edit",
+                    callbackUrl: `${config.baseURL}example/track?filename=${selectedFile}`,
+                  },
+                }}
+                events_onDocumentReady={onDocumentReady}
+                events_onError={onError}
+                events_onWarning={onWarning}
+                events_onInfo={onInfo}
+                onLoadComponentError={onLoadComponentError}
+              />
+            </div>
+          )}
+        </div>
+
+        {/* Right panel - Chat */}
+        <div 
+          className="right-panel" 
+          style={{ 
+            width: rightPanelVisible ? `${rightPanelWidth}px` : '0',
+            minWidth: rightPanelVisible ? `${rightPanelWidth}px` : '0',
+            maxWidth: rightPanelVisible ? `${rightPanelWidth}px` : '0',
+            overflow: rightPanelVisible ? 'visible' : 'hidden',
+            transition: rightPanelVisible ? 'none' : 'all 0.3s ease'
+          }}
+        >
+          {rightPanelVisible && (
+            <div className="resize-handle resize-handle-left">
+              <div 
+                className="resize-handle-drag"
+                onMouseDown={handleRightResizeStart}
+                title="拖拽调整宽度"
+              />
+              <button 
+                className="resize-handle-btn"
+                onClick={() => setRightPanelVisible(false)}
+                title="隐藏聊天面板"
+              >
+                ▶
+              </button>
+            </div>
+          )}
+          <ChatPanel 
+            docEditor={docEditor}
+            isEditorReady={isEditorReady}
+            files={files}
+            onLoadMCP={handleLoadMCP}
+          />
+        </div>
+        {!rightPanelVisible && (
+          <div 
+            className="panel-toggle panel-toggle-right"
+            onClick={() => setRightPanelVisible(true)}
+            title="显示聊天面板"
+          >
+            <span>◀</span>
           </div>
         )}
       </div>

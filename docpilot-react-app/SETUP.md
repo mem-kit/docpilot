@@ -39,14 +39,14 @@ npm start
 
 ### 3. 访问应用
 - 前端: http://localhost:3000
-- 后端 API: http://192.168.50.156
+- 后端 API: http://172.20.10.2/
 
 ## API 端点
 
 ### GET /example/download
 下载文档
 - 参数: `fileName` (例如: `new.docx`)
-- 示例: `http://192.168.50.156/example/download?fileName=new.docx`
+- 示例: `http://172.20.10.2/example/download?fileName=new.docx`
 
 ### POST /example/callback
 OnlyOffice Document Server 回调端点
@@ -71,12 +71,12 @@ config={{
     fileType: "docx",
     key: "Khirz6zTPdfd7",  // 每个文档版本需要唯一的 key
     title: "Example Document Title.docx",
-    url: "http://192.168.50.156/example/download?fileName=new.docx",
+    url: "http://172.20.10.2/example/download?fileName=new.docx",
   },
   documentType: "word",
   editorConfig: {
     mode: "edit",  // "edit" 或 "view"
-    callbackUrl: "http://192.168.50.156/example/callback",
+    callbackUrl: "http://172.20.10.2/example/callback",
   },
 }}
 ```
