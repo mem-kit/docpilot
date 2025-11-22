@@ -1,60 +1,13 @@
-import {DocumentEditor} from "@onlyoffice/document-editor-react";
-
-import React, {useRef} from "react";
+import React, { useRef } from "react";
 import config from "./config";
 import "./App.css";
 import FileList from "./components/FileList";
 import ChatPanel from "./components/ChatPanel";
-
-function onLoadComponentError(errorCode, errorDescription) {
-  switch (errorCode) {
-  case -1: // Unknown error loading component
-    console.log(errorDescription);
-    break;
-
-  case -2: // Error load DocsAPI from http://documentserver/
-    console.log(errorDescription);
-    break;
-
-  case -3: // DocsAPI is not defined
-    console.log(errorDescription);
-    break;
-  
-  default:
-    break;
-  }
-}
-
-function onError(event) {
-  console.log("Editor error:", event);
-  if (event.data && event.data.errorCode) {
-    switch(event.data.errorCode) {
-      case -4:
-        console.error("Download failed - OnlyOffice server cannot access the document URL");
-        console.error("Document URL:", event.data.errorDescription);
-        break;
-      default:
-        console.error("Error code:", event.data.errorCode);
-        console.error("Error description:", event.data.errorDescription);
-    }
-  }
-}
-
-function onWarning(event) {
-  console.log("Editor warning:", event);
-}
-
-function onInfo(event) {
-  console.log("Editor info:", event);
-}
-
-const getFileType = (filename) => {
-  if (!filename) return 'docx';
-  return filename.split('.').pop().toLowerCase();
-};
+import EditorPanel from "./components/EditorPanel";
 
 const getDocumentType = (filename) => {
-  const ext = getFileType(filename);
+  if (!filename) return 'word';
+  const ext = filename.split('.').pop().toLowerCase();
   if (['doc', 'docx', 'txt', 'pdf'].includes(ext)) return 'word';
   if (['xls', 'xlsx', 'csv'].includes(ext)) return 'cell';
   if (['ppt', 'pptx'].includes(ext)) return 'slide';
@@ -64,13 +17,10 @@ const getDocumentType = (filename) => {
 export default function App() {
   const [files, setFiles] = React.useState([]);
   const [selectedFile, setSelectedFile] = React.useState('new.docx');
-  const docEditorRef = useRef(null);
   const [docEditor, setDocEditor] = React.useState(null);
   const [isEditorReady, setIsEditorReady] = React.useState(false);
-  const [isCleaningUp, setIsCleaningUp] = React.useState(false);
   const [leftPanelVisible, setLeftPanelVisible] = React.useState(true);
   const [rightPanelVisible, setRightPanelVisible] = React.useState(true);
-  const [mcpConfig, setMcpConfig] = React.useState(null);
   const [leftPanelWidth, setLeftPanelWidth] = React.useState(280);
   const [rightPanelWidth, setRightPanelWidth] = React.useState(400);
   const [isResizingLeft, setIsResizingLeft] = React.useState(false);
@@ -78,61 +28,11 @@ export default function App() {
   const resizeStartX = useRef(0);
   const resizeStartWidth = useRef(0);
   
-  // Generate a unique key based on file and timestamp to avoid caching issues
-  const documentKey = React.useMemo(() => `${selectedFile}_${Date.now()}`, [selectedFile]);
-  
-  // Generate unique editor ID for each document
-  const editorId = React.useMemo(() => `docEditor_${documentKey}`, [documentKey]);
-  
-  // Reset editor state and cleanup when file changes
-  React.useEffect(() => {
-    // Cleanup function for destroying existing editor
-    const cleanupEditor = async () => {
-      // Set cleaning flag to prevent new editor from rendering
-      setIsCleaningUp(true);
-      setIsEditorReady(false);
-      setDocEditor(null);
-      
-      // Destroy all existing editor instances before switching files
-      if (window.DocEditor && window.DocEditor.instances) {
-        const instances = Object.keys(window.DocEditor.instances);
-        console.log('🧹 Destroying editors:', instances);
-        
-        for (const key of instances) {
-          try {
-            const instance = window.DocEditor.instances[key];
-            if (instance && typeof instance.destroyEditor === 'function') {
-              console.log('Calling destroyEditor on:', key);
-              instance.destroyEditor();
-            }
-            // Manually delete the instance reference
-            delete window.DocEditor.instances[key];
-            console.log('✓ Deleted instance:', key);
-          } catch (e) {
-            console.log('Error destroying editor instance:', e);
-          }
-        }
-        
-        // Clear any container DOM that might exist
-        const allContainers = document.querySelectorAll('[id^="docEditor"]');
-        allContainers.forEach(container => {
-          if (container && container.parentNode) {
-            container.innerHTML = '';
-            console.log('✓ Cleared DOM container:', container.id);
-          }
-        });
-        
-        // Give ONLYOFFICE time to clean up its own DOM
-        await new Promise(resolve => setTimeout(resolve, 250));
-        console.log('✓ Cleanup complete');
-      }
-      
-      // Allow new editor to render
-      setIsCleaningUp(false);
-    };
-    
-    cleanupEditor();
-  }, [selectedFile]);
+  // Handle editor ready callback from EditorPanel
+  const handleEditorReady = React.useCallback((editor) => {
+    setDocEditor(editor);
+    setIsEditorReady(!!editor);
+  }, []);
   
   // Load files from OnlyOffice example storage
   React.useEffect(() => {
@@ -147,7 +47,7 @@ export default function App() {
         }
       })
       .catch(err => console.error('Failed to load files:', err));
-  }, []);
+  }, [selectedFile]);
 
   // Handle file selection
   const handleFileSelect = (file) => {
@@ -155,9 +55,8 @@ export default function App() {
   };
 
   // Handle MCP config load
-  const handleLoadMCP = (config) => {
-    setMcpConfig(config);
-    console.log('MCP Config loaded:', config);
+  const handleLoadMCP = () => {
+    console.log('MCP Config loaded');
   };
 
   // Handle left panel resize
@@ -209,59 +108,6 @@ export default function App() {
       document.body.style.userSelect = '';
     };
   }, [isResizingLeft, isResizingRight, leftPanelWidth, rightPanelWidth]);
-  
-  // Handle document ready event
-  const onDocumentReady = React.useCallback((event) => {
-    console.log("✓ Document is loaded");
-    
-    // Get editor instance from window.DocEditor instances
-    let editor = null;
-    
-    if (window.DocEditor && window.DocEditor.instances) {
-      const instances = window.DocEditor.instances;
-      console.log("DocEditor instances:", Object.keys(instances));
-      
-      // Get by ID or first available
-      editor = instances['docEditor'] || instances[Object.keys(instances)[0]];
-    }
-    
-    // Fallback to ref
-    if (!editor && docEditorRef.current) {
-      editor = docEditorRef.current.docEditor || docEditorRef.current;
-    }
-    
-    if (editor) {
-      console.log("✓ Got editor instance");
-      console.log("Available methods:", Object.keys(editor));
-      
-      // Save editor - we'll use serviceCommand method which is available
-      setDocEditor(editor);
-      setIsEditorReady(true);
-      console.log("✓ Editor ready!");
-    } else {
-      console.error("✗ Failed to get editor instance");
-      setIsEditorReady(false);
-    }
-  }, []);
-  
-  // Cleanup on unmount
-  React.useEffect(() => {
-    return () => {
-      console.log('Component unmounting, cleaning up editors');
-      if (window.DocEditor && window.DocEditor.instances) {
-        Object.keys(window.DocEditor.instances).forEach(key => {
-          try {
-            const instance = window.DocEditor.instances[key];
-            if (instance && typeof instance.destroyEditor === 'function') {
-              instance.destroyEditor();
-            }
-          } catch (e) {
-            console.log('Error destroying editor on unmount:', e);
-          }
-        });
-      }
-    };
-  }, []);
   
   // Function to update a paragraph in the document
   const updateParagraph = () => {
@@ -608,46 +454,10 @@ export default function App() {
 
         {/* Center panel - Document Editor */}
         <div className="center-panel">
-          {isCleaningUp ? (
-            <div style={{ 
-              width: '100%', 
-              height: '100%', 
-              display: 'flex', 
-              alignItems: 'center', 
-              justifyContent: 'center',
-              fontSize: '16px',
-              color: '#666'
-            }}>
-              🧹 清理中...
-            </div>
-          ) : (
-            <div key={`editor-wrapper-${documentKey}`} style={{ width: '100%', height: '100%', position: 'absolute' }}>
-              <DocumentEditor
-                key={`${getDocumentType(selectedFile)}-${documentKey}`}
-                ref={docEditorRef}
-                id={editorId}
-                documentServerUrl={config.baseURL}
-                config={{
-                  document: {
-                    fileType: getFileType(selectedFile),
-                    key: documentKey,
-                    title: selectedFile,
-                    url: `${config.baseURL}example/download?fileName=${selectedFile}`,
-                  },
-                  documentType: getDocumentType(selectedFile),
-                  editorConfig: {
-                    mode: "edit",
-                    callbackUrl: `${config.baseURL}example/track?filename=${selectedFile}`,
-                  },
-                }}
-                events_onDocumentReady={onDocumentReady}
-                events_onError={onError}
-                events_onWarning={onWarning}
-                events_onInfo={onInfo}
-                onLoadComponentError={onLoadComponentError}
-              />
-            </div>
-          )}
+          <EditorPanel 
+            selectedFile={selectedFile}
+            onEditorReady={handleEditorReady}
+          />
         </div>
 
         {/* Right panel - Chat */}
