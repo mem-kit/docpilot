@@ -19,8 +19,13 @@ export const tools = [
       description: "在Word文档中插入一个新段落。适用于添加文本内容到文档中。",
       parameters: {
         type: "object",
-        properties: {},
-        required: []
+        properties: {
+          text: {
+            type: "string",
+            description: "要插入的段落文本内容"
+          }
+        },
+        required: ["text"]
       }
     }
   },
@@ -28,11 +33,31 @@ export const tools = [
     type: "function",
     function: {
       name: "insertFormattedText",
-      description: "在Word文档中插入格式化文本，包含粗体、斜体和下划线样式。适用于需要添加带格式的文本。",
+      description: "在Word文档中插入格式化文本，可以指定粗体、斜体、下划线等样式。",
       parameters: {
         type: "object",
-        properties: {},
-        required: []
+        properties: {
+          text: {
+            type: "string",
+            description: "要插入的文本内容"
+          },
+          bold: {
+            type: "boolean",
+            description: "是否设置为粗体",
+            default: false
+          },
+          italic: {
+            type: "boolean",
+            description: "是否设置为斜体",
+            default: false
+          },
+          underline: {
+            type: "boolean",
+            description: "是否添加下划线",
+            default: false
+          }
+        },
+        required: ["text"]
       }
     }
   },
@@ -40,11 +65,16 @@ export const tools = [
     type: "function",
     function: {
       name: "replaceCurrentWord",
-      description: "替换Word文档中当前选中的文本。用户需要先在文档中选中要替换的文本。",
+      description: "替换Word文档中当前选中的文本。如果没有选中文本，则在光标位置插入。",
       parameters: {
         type: "object",
-        properties: {},
-        required: []
+        properties: {
+          text: {
+            type: "string",
+            description: "要替换为的新文本"
+          }
+        },
+        required: ["text"]
       }
     }
   },
@@ -52,11 +82,26 @@ export const tools = [
     type: "function",
     function: {
       name: "updateSpreadsheet",
-      description: "更新Excel表格，在A1单元格插入'Hello from React'并设置为粗体，在B1单元格插入'Updated via API'。",
+      description: "更新Excel表格中的单元格内容，可以指定单元格位置、文本内容和格式。",
       parameters: {
         type: "object",
-        properties: {},
-        required: []
+        properties: {
+          cell: {
+            type: "string",
+            description: "单元格位置，例如 'A1', 'B2' 等",
+            default: "A1"
+          },
+          value: {
+            type: "string",
+            description: "要设置的单元格值"
+          },
+          bold: {
+            type: "boolean",
+            description: "是否设置为粗体",
+            default: false
+          }
+        },
+        required: ["value"]
       }
     }
   },
@@ -64,11 +109,21 @@ export const tools = [
     type: "function",
     function: {
       name: "updatePresentation",
-      description: "更新PowerPoint演示文稿，修改第一张幻灯片的第一个形状中的文本为'Updated Slide from React'。",
+      description: "更新PowerPoint演示文稿中指定幻灯片的文本内容。",
       parameters: {
         type: "object",
-        properties: {},
-        required: []
+        properties: {
+          slideIndex: {
+            type: "number",
+            description: "幻灯片索引（从0开始）",
+            default: 0
+          },
+          text: {
+            type: "string",
+            description: "要设置的文本内容"
+          }
+        },
+        required: ["text"]
       }
     }
   }
@@ -95,8 +150,11 @@ export const toolFunctions = {
  */
 export async function executeToolCall(toolName, args, docEditor) {
   console.log(`🔧 Executing tool: ${toolName}`, args);
+  console.log(`📋 Editor instance:`, docEditor);
+  console.log(`📋 Editor has createConnector:`, docEditor?.createConnector);
   
   if (!docEditor) {
+    console.error('❌ Document editor is not available');
     return {
       success: false,
       error: "Document editor is not available"
@@ -113,8 +171,13 @@ export async function executeToolCall(toolName, args, docEditor) {
   }
 
   try {
-    // 调用工具函数
-    await toolFunction(docEditor, args);
+    // 调用工具函数并获取结果
+    const result = await toolFunction(docEditor, args);
+    
+    // 如果工具函数返回了结果，使用它；否则返回默认成功消息
+    if (result && typeof result === 'object') {
+      return result;
+    }
     
     return {
       success: true,

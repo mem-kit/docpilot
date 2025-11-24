@@ -6,37 +6,45 @@
 /**
  * 更新演示文稿
  * @param {Object} docEditor - OnlyOffice文档编辑器实例
+ * @param {Object} args - 参数对象 {slideIndex: number, text: string}
  */
-export const updatePresentation = (docEditor) => {
-  console.log('📽️ updatePresentation clicked');
+export const updatePresentation = (docEditor, args = {}) => {
+  const { slideIndex = 0, text = 'Updated Slide from API' } = args;
+  console.log('📽️ updatePresentation called with:', { slideIndex, text });
   
   if (!docEditor) {
     console.error('Document editor not initialized yet');
-    alert('请等待文档加载完成后再试');
-    return;
+    throw new Error('文档编辑器未初始化');
   }
 
-  if (docEditor.createConnector) {
-    try {
-      const connector = docEditor.createConnector();
-      connector.callCommand(function() {
-        // eslint-disable-next-line no-undef
-        var oPresentation = Api.GetPresentation();
-        var oSlide = oPresentation.GetSlideByIndex(0);
-        if (oSlide) {
+  return new Promise((resolve, reject) => {
+    if (docEditor.createConnector) {
+      try {
+        const connector = docEditor.createConnector();
+        const textJson = JSON.stringify(text);
+        const functionBody = `
+          var oPresentation = Api.GetPresentation();
+          var oSlide = oPresentation.GetSlideByIndex(${slideIndex});
+          if (oSlide) {
             var oShape = oSlide.GetAllShapes()[0];
             if (oShape) {
-                 var oDocContent = oShape.GetDocContent();
-                 oDocContent.RemoveAllElements();
-                 var oParagraph = oDocContent.GetElement(0);
-                 oParagraph.AddText("Updated Slide from React");
+              var oDocContent = oShape.GetDocContent();
+              oDocContent.RemoveAllElements();
+              var oParagraph = oDocContent.GetElement(0);
+              oParagraph.AddText(${textJson});
             }
-        }
-      }, function() {
-        console.log("Presentation updated");
-      });
-    } catch (e) {
-      console.error("Connector error:", e);
+          }
+        `;
+        connector.callCommand(new Function(functionBody), function(result) {
+          console.log("Presentation updated", result);
+          resolve({ success: true, message: `成功更新幻灯片 ${slideIndex + 1}: ${text}` });
+        });
+      } catch (e) {
+        console.error("Connector error:", e);
+        reject(new Error(`执行失败: ${e.message}`));
+      }
+    } else {
+      reject(new Error('createConnector API 不可用'));
     }
-  }
+  });
 };

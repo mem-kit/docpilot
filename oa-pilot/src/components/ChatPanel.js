@@ -8,7 +8,7 @@ export default function ChatPanel({ docEditor, isEditorReady, files, onLoadMCP }
   const [messages, setMessages] = useState([]);
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
-  const [agentMode, setAgentMode] = useState(false);
+  const [mode, setMode] = useState('ask'); // 'ask' or 'agent'
   const messagesEndRef = useRef(null);
 
   // Initialize OpenAI client with DeepSeek configuration
@@ -26,23 +26,24 @@ export default function ChatPanel({ docEditor, isEditorReady, files, onLoadMCP }
     scrollToBottom();
   }, [messages]);
 
-  const loadMCPConfig = async () => {
-    try {
-      setAgentMode(true);
-      
+  const handleModeChange = (newMode) => {
+    setMode(newMode);
+    
+    if (newMode === 'agent') {
       const toolsDesc = getToolsDescription();
-      
       setMessages(prev => [...prev, {
         role: 'system',
-        content: `✅ Agent mode enabled with Function Calling support!\n\n📋 Available tools:\n${toolsDesc.map((t, i) => `${i + 1}. ${t.name}: ${t.description}`).join('\n')}\n\n💡 Example commands:\n- "帮我在文档中插入一个段落"\n- "添加一些格式化文本"\n- "更新Excel表格"\n- "修改PPT幻灯片"`
+        content: `🤖 Switched to Agent Mode\n\n📋 Available tools:\n${toolsDesc.map((t, i) => `${i + 1}. ${t.name}: ${t.description}`).join('\n')}\n\n💡 Example commands:\n- "Add a paragraph to the document"\n- "Insert formatted text"\n- "Update Excel spreadsheet"\n- "Modify PPT slide"`
       }]);
       
       if (onLoadMCP) {
         onLoadMCP({ tools: toolsDesc });
       }
-    } catch (error) {
-      console.error('Failed to load configuration:', error);
-      alert('Failed to load configuration: ' + error.message);
+    } else {
+      setMessages(prev => [...prev, {
+        role: 'system',
+        content: '💬 Switched to Ask Mode\n\nI will answer your questions but won\'t execute document operations.'
+      }]);
     }
   };
 
@@ -69,8 +70,21 @@ export default function ChatPanel({ docEditor, isEditorReady, files, onLoadMCP }
         messages: [
           {
             role: 'system',
-            content: agentMode 
-              ? '你是一个智能文档助手，可以帮助用户操作Word、Excel和PowerPoint文档。当用户要求编辑文档时，请调用相应的工具函数。用中文回复。'
+            content: mode === 'agent' 
+              ? `你是一个智能文档助手，可以帮助用户操作Word、Excel和PowerPoint文档。
+
+可用工具：
+1. updateParagraph - 在Word文档中插入新段落（参数：text）
+2. insertFormattedText - 在Word文档中插入格式化文本（参数：text, bold, italic, underline）
+3. replaceCurrentWord - 替换Word文档中选中的文本（参数：text）
+4. updateSpreadsheet - 更新Excel单元格内容（参数：cell, value, bold）
+5. updatePresentation - 更新PowerPoint幻灯片内容（参数：slideIndex, text）
+
+使用指南：
+- 当用户要求编辑文档时，主动调用相应的工具
+- 根据用户的具体需求选择合适的工具和参数
+- 如果用户没有明确指定参数，使用合理的默认值
+- 用中文回复，保持专业和友好的语气`
               : '你是一个有帮助的AI助手。用中文回复。'
           },
           ...apiMessages
@@ -80,7 +94,7 @@ export default function ChatPanel({ docEditor, isEditorReady, files, onLoadMCP }
       };
 
       // Add tools if agent mode is enabled
-      if (agentMode && isEditorReady) {
+      if (mode === 'agent' && isEditorReady) {
         apiConfig.tools = tools;
         apiConfig.tool_choice = 'auto';
       }
@@ -94,48 +108,87 @@ export default function ChatPanel({ docEditor, isEditorReady, files, onLoadMCP }
         // Add assistant's message with tool calls to conversation
         const toolCallMessages = [...apiMessages, responseMessage];
         
-        // Execute all tool calls
+        // Execute all tool calls sequentially
         for (const toolCall of responseMessage.tool_calls) {
           const functionName = toolCall.function.name;
           const functionArgs = JSON.parse(toolCall.function.arguments || '{}');
           
           console.log(`🔧 LLM requested tool: ${functionName}`, functionArgs);
           
-          // Execute the tool
-          const result = await executeToolCall(functionName, functionArgs, docEditor);
-          
-          // Add tool result to messages
-          toolCallMessages.push({
-            role: 'tool',
-            tool_call_id: toolCall.id,
-            name: functionName,
-            content: JSON.stringify(result)
-          });
-          
-          // Show tool execution in UI
+          // Show tool execution start in UI
           setMessages(prev => [...prev, {
             role: 'assistant',
-            content: `🔧 正在执行: ${functionName}\n结果: ${result.success ? '✅ 成功' : '❌ 失败: ' + result.error}`,
+            content: `🔧 正在执行: ${functionName}\n参数: ${JSON.stringify(functionArgs, null, 2)}`,
             isAgent: true
           }]);
+          
+          try {
+            // Execute the tool
+            console.log('📝 About to execute tool with editor:', docEditor);
+            console.log('📝 Editor ready status:', isEditorReady);
+            const result = await executeToolCall(functionName, functionArgs, docEditor);
+            console.log('📝 Tool execution result:', result);
+            
+            // Add tool result to messages
+            toolCallMessages.push({
+              role: 'tool',
+              tool_call_id: toolCall.id,
+              name: functionName,
+              content: JSON.stringify(result)
+            });
+            
+            // Show tool execution result in UI
+            setMessages(prev => [...prev, {
+              role: 'assistant',
+              content: result.success 
+                ? `✅ 执行成功\n${result.message || '操作已完成'}` 
+                : `❌ 执行失败\n错误: ${result.error || '未知错误'}`,
+              isAgent: true
+            }]);
+          } catch (error) {
+            console.error(`Error executing ${functionName}:`, error);
+            
+            // Add error to tool messages
+            toolCallMessages.push({
+              role: 'tool',
+              tool_call_id: toolCall.id,
+              name: functionName,
+              content: JSON.stringify({ success: false, error: error.message })
+            });
+            
+            // Show error in UI
+            setMessages(prev => [...prev, {
+              role: 'assistant',
+              content: `❌ 执行失败: ${functionName}\n错误: ${error.message}`,
+              isAgent: true
+            }]);
+          }
         }
         
         // Get final response from LLM after tool execution
-        const secondCompletion = await openai.chat.completions.create({
-          model: 'deepseek-chat',
-          messages: [
-            {
-              role: 'system',
-              content: '你是一个智能文档助手。根据工具执行结果，向用户简洁地报告操作完成情况。用中文回复。'
-            },
-            ...toolCallMessages
-          ],
-          temperature: 0.7,
-          max_tokens: 1000
-        });
-        
-        const finalMessage = secondCompletion.choices[0].message.content;
-        setMessages(prev => [...prev, { role: 'assistant', content: finalMessage }]);
+        try {
+          const secondCompletion = await openai.chat.completions.create({
+            model: 'deepseek-chat',
+            messages: [
+              {
+                role: 'system',
+                content: '你是一个智能文档助手。根据工具执行结果，向用户简洁清晰地报告操作完成情况。如果有错误，给出建议。用中文回复。'
+              },
+              ...toolCallMessages
+            ],
+            temperature: 0.7,
+            max_tokens: 1000
+          });
+          
+          const finalMessage = secondCompletion.choices[0].message.content;
+          setMessages(prev => [...prev, { role: 'assistant', content: finalMessage }]);
+        } catch (error) {
+          console.error('Error getting final response:', error);
+          setMessages(prev => [...prev, { 
+            role: 'assistant', 
+            content: '工具已执行完成，但生成总结时出错。'
+          }]);
+        }
         
       } else {
         // No tool calls, just regular response
@@ -165,20 +218,11 @@ export default function ChatPanel({ docEditor, isEditorReady, files, onLoadMCP }
     <div className="chat-panel">
       <div className="chat-header">
         <h3>AI Assistant</h3>
-        <div className="chat-controls">
-          <button 
-            onClick={loadMCPConfig} 
-            className={`mcp-btn ${agentMode ? 'active' : ''}`}
-            title="Load MCP configuration for agent mode"
-          >
-            {agentMode ? '🤖 Agent Mode ON' : '🔧 Load MCP'}
-          </button>
-        </div>
       </div>
 
-      {agentMode && (
+      {mode === 'agent' && (
         <div className="agent-status">
-          <span className="status-badge">🤖 Agent Mode Active</span>
+          <span className="status-badge">🤖 Agent Mode</span>
           {!isEditorReady && (
             <span className="warning-badge">⚠️ Editor not ready</span>
           )}
@@ -189,9 +233,18 @@ export default function ChatPanel({ docEditor, isEditorReady, files, onLoadMCP }
         {messages.length === 0 && (
           <div className="chat-welcome">
             <h4>👋 Welcome!</h4>
-            <p>Ask me anything or use agent mode to automate document editing.</p>
-            {!agentMode && (
-              <p className="hint">💡 Click "Load MCP" to enable document automation.</p>
+            {mode === 'ask' ? (
+              <>
+                <p>💬 <strong>Ask Mode</strong></p>
+                <p>I can answer your questions and provide information.</p>
+                <p className="hint">💡 Switch to Agent mode to automate document operations</p>
+              </>
+            ) : (
+              <>
+                <p>🤖 <strong>Agent Mode</strong></p>
+                <p>I can automatically operate Word, Excel and PowerPoint documents.</p>
+                <p className="hint">💡 Try: "Add a paragraph to the document"</p>
+              </>
             )}
           </div>
         )}
@@ -228,18 +281,29 @@ export default function ChatPanel({ docEditor, isEditorReady, files, onLoadMCP }
           value={input}
           onChange={(e) => setInput(e.target.value)}
           onKeyPress={handleKeyPress}
-          placeholder={agentMode ? "例如：'帮我在文档中插入一个段落' 或 '更新Excel表格'..." : "输入您的消息..."}
+          placeholder={mode === 'agent' ? "e.g., 'Add a paragraph' or 'Update Excel'..." : "Ask me anything..."}
           className="chat-input"
           rows={3}
           disabled={isLoading}
         />
-        <button 
-          onClick={sendMessage} 
-          disabled={!input.trim() || isLoading}
-          className="send-btn"
-        >
-          {isLoading ? '⏳' : '📤'} Send
-        </button>
+        <div className="input-actions">
+          <select 
+            className="mode-selector-bottom"
+            value={mode}
+            onChange={(e) => handleModeChange(e.target.value)}
+            title="Select mode"
+          >
+            <option value="ask">💬 Ask</option>
+            <option value="agent">🤖 Agent</option>
+          </select>
+          <button 
+            onClick={sendMessage} 
+            disabled={!input.trim() || isLoading}
+            className="send-btn"
+          >
+            {isLoading ? '⏳' : '📤'} Send
+          </button>
+        </div>
       </div>
     </div>
   );

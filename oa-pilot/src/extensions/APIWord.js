@@ -6,138 +6,130 @@
 /**
  * 更新文档中的段落
  * @param {Object} docEditor - OnlyOffice文档编辑器实例
+ * @param {Object} args - 参数对象 {text: string}
  */
-export const updateParagraph = (docEditor) => {
-  console.log('📝 updateParagraph clicked');
+export const updateParagraph = (docEditor, args = {}) => {
+  const text = args.text || '这是新插入的段落';
+  console.log('📝 updateParagraph called with text:', text);
   
   if (!docEditor) {
     console.error('Document editor not initialized yet');
-    alert('请等待文档加载完成后再试');
-    return;
+    throw new Error('文档编辑器未初始化');
   }
 
-  // Check if createConnector is available (Standard API)
-  if (docEditor.createConnector) {
-    try {
-      const connector = docEditor.createConnector();
-      connector.callCommand(function() {
-        // eslint-disable-next-line no-undef
-        var oDocument = Api.GetDocument();
-        // eslint-disable-next-line no-undef
-        var oParagraph = Api.CreateParagraph();
-        oParagraph.AddText("这是新插入的段落 from React");
-        oDocument.InsertContent([oParagraph]);
-      }, function() {
-        console.log("Command executed successfully");
-      });
-    } catch (e) {
-      console.error("Connector error:", e);
+  return new Promise((resolve, reject) => {
+    if (docEditor.createConnector) {
+      try {
+        const connector = docEditor.createConnector();
+        // 将参数序列化为JSON字符串，嵌入到函数体中
+        const textJson = JSON.stringify(text);
+        const functionBody = `
+          var oDocument = Api.GetDocument();
+          var oParagraph = Api.CreateParagraph();
+          var textToAdd = ${textJson};
+          oParagraph.AddText(textToAdd);
+          oDocument.InsertContent([oParagraph]);
+        `;
+        // 使用new Function创建函数并传递给callCommand
+        connector.callCommand(new Function(functionBody), function(result) {
+          console.log("Command executed successfully", result);
+          resolve({ success: true, message: `成功插入段落: ${text}` });
+        });
+      } catch (e) {
+        console.error("Connector error:", e);
+        reject(new Error(`执行失败: ${e.message}`));
+      }
+    } else {
+      reject(new Error('createConnector API 不可用'));
     }
-  } else {
-    // Fallback for environments where API is not fully available
-    console.warn("createConnector API not available on this Document Server");
-  }
+  });
 };
 
 /**
  * 插入格式化文本到文档
  * @param {Object} docEditor - OnlyOffice文档编辑器实例
+ * @param {Object} args - 参数对象 {text: string, bold: boolean, italic: boolean, underline: boolean}
  */
-export const insertFormattedText = (docEditor) => {
-  console.log('✨ insertFormattedText clicked');
+export const insertFormattedText = (docEditor, args = {}) => {
+  const { text = '格式化文本', bold = false, italic = false, underline = false } = args;
+  console.log('✨ insertFormattedText called with:', { text, bold, italic, underline });
   
   if (!docEditor) {
     console.error('Document editor not initialized yet');
-    alert('请等待文档加载完成后再试');
-    return;
+    throw new Error('文档编辑器未初始化');
   }
   
-  if (docEditor.createConnector) {
-    try {
-      const connector = docEditor.createConnector();
-      connector.callCommand(function() {
-        // eslint-disable-next-line no-undef
-        var oDocument = Api.GetDocument();
-        // eslint-disable-next-line no-undef
-        var oParagraph = Api.CreateParagraph();
-        
-        // Bold text
-        // eslint-disable-next-line no-undef
-        var oRunBold = Api.CreateRun();
-        oRunBold.SetBold(true);
-        oRunBold.AddText("Bold text");
-        oParagraph.AddElement(oRunBold);
-
-        // Normal text
-        // eslint-disable-next-line no-undef
-        var oRunNormal = Api.CreateRun();
-        oRunNormal.AddText(" and ");
-        oParagraph.AddElement(oRunNormal);
-
-        // Italic text
-        // eslint-disable-next-line no-undef
-        var oRunItalic = Api.CreateRun();
-        oRunItalic.SetItalic(true);
-        oRunItalic.AddText("italic text");
-        oParagraph.AddElement(oRunItalic);
-        
-        // Underline text
-        // eslint-disable-next-line no-undef
-        var oRunUnderline = Api.CreateRun();
-        oRunUnderline.SetUnderline(true);
-        oRunUnderline.AddText(" with underline");
-        oParagraph.AddElement(oRunUnderline);
-
-        oDocument.InsertContent([oParagraph]);
-      }, function() {
-        console.log("Formatted text inserted successfully");
-      });
-    } catch (e) {
-      console.error("Connector error:", e);
+  return new Promise((resolve, reject) => {
+    if (docEditor.createConnector) {
+      try {
+        const connector = docEditor.createConnector();
+        const textJson = JSON.stringify(text);
+        const functionBody = `
+          var oDocument = Api.GetDocument();
+          var oParagraph = Api.CreateParagraph();
+          var oRun = Api.CreateRun();
+          
+          if (${bold}) oRun.SetBold(true);
+          if (${italic}) oRun.SetItalic(true);
+          if (${underline}) oRun.SetUnderline(true);
+          
+          oRun.AddText(${textJson});
+          oParagraph.AddElement(oRun);
+          oDocument.InsertContent([oParagraph]);
+        `;
+        connector.callCommand(new Function(functionBody), function(result) {
+          console.log("Formatted text inserted successfully", result);
+          const styles = [];
+          if (bold) styles.push('粗体');
+          if (italic) styles.push('斜体');
+          if (underline) styles.push('下划线');
+          const styleStr = styles.length > 0 ? `(${styles.join(', ')})` : '';
+          resolve({ success: true, message: `成功插入格式化文本${styleStr}: ${text}` });
+        });
+      } catch (e) {
+        console.error("Connector error:", e);
+        reject(new Error(`执行失败: ${e.message}`));
+      }
+    } else {
+      reject(new Error('createConnector API 不可用'));
     }
-  } else {
-    docEditor.showMessage('API Limitation', 'createConnector API not available', 'warning');
-  }
+  });
 };
 
 /**
  * 替换当前选中的单词
  * @param {Object} docEditor - OnlyOffice文档编辑器实例
+ * @param {Object} args - 参数对象 {text: string}
  */
-export const replaceCurrentWord = (docEditor) => {
-  console.log('🔄 replaceCurrentWord clicked');
+export const replaceCurrentWord = (docEditor, args = {}) => {
+  const text = args.text || 'REPLACED';
+  console.log('🔄 replaceCurrentWord called with text:', text);
   
   if (!docEditor) {
     console.error('Document editor not initialized yet');
-    alert('请等待文档加载完成后再试');
-    return;
+    throw new Error('文档编辑器未初始化');
   }
   
-  if (docEditor.createConnector) {
-    try {
-      const connector = docEditor.createConnector();
-      connector.callCommand(function() {
-        // eslint-disable-next-line no-undef
-        var oDocument = Api.GetDocument();
-        
-        // Try to get selection
-        // eslint-disable-next-line no-undef
-        var oRange = oDocument.GetRangeBySelect();
-        
-        // If selection is empty or collapsed, we might want to select the current word
-        // But for simplicity, let's just insert text at current position if nothing selected
-        // Or replace selection if something is selected
-        
-        // eslint-disable-next-line no-undef
-        oRange.SetText("REPLACED");
-        
-      }, function() {
-        console.log("Word replaced successfully");
-      });
-    } catch (e) {
-      console.error("Connector error:", e);
+  return new Promise((resolve, reject) => {
+    if (docEditor.createConnector) {
+      try {
+        const connector = docEditor.createConnector();
+        const textJson = JSON.stringify(text);
+        const functionBody = `
+          var oDocument = Api.GetDocument();
+          var oRange = oDocument.GetRangeBySelect();
+          oRange.SetText(${textJson});
+        `;
+        connector.callCommand(new Function(functionBody), function(result) {
+          console.log("Word replaced successfully", result);
+          resolve({ success: true, message: `成功替换文本为: ${text}` });
+        });
+      } catch (e) {
+        console.error("Connector error:", e);
+        reject(new Error(`执行失败: ${e.message}`));
+      }
+    } else {
+      reject(new Error('createConnector API 不可用'));
     }
-  } else {
-    docEditor.showMessage('API Limitation', 'createConnector API not available', 'warning');
-  }
+  });
 };
