@@ -2,6 +2,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import OpenAI from 'openai';
 import config from '../config';
 import './ChatPanel.css';
+import { tools, executeToolCall, getToolsDescription } from '../extensions/EngineDocument';
 
 export default function ChatPanel({ docEditor, isEditorReady, files, onLoadMCP }) {
   const [messages, setMessages] = useState([]);
@@ -27,26 +28,17 @@ export default function ChatPanel({ docEditor, isEditorReady, files, onLoadMCP }
 
   const loadMCPConfig = async () => {
     try {
-      // Look for mcp.json in the files list
-      const mcpFile = files.find(f => f.title.toLowerCase() === 'mcp.json');
-      if (!mcpFile) {
-        alert('mcp.json not found in file list');
-        return;
-      }
-
-      // Fetch the mcp.json content
-      const response = await fetch(`${config.baseURL}example/download?fileName=${mcpFile.title}`);
-      const mcpData = await response.json();
-      
       setAgentMode(true);
+      
+      const toolsDesc = getToolsDescription();
       
       setMessages(prev => [...prev, {
         role: 'system',
-        content: `✅ Configuration loaded successfully. Agent mode enabled.\n\nAvailable tools: ${JSON.stringify(mcpData.tools || mcpData, null, 2)}`
+        content: `✅ Agent mode enabled with Function Calling support!\n\n📋 Available tools:\n${toolsDesc.map((t, i) => `${i + 1}. ${t.name}: ${t.description}`).join('\n')}\n\n💡 Example commands:\n- "帮我在文档中插入一个段落"\n- "添加一些格式化文本"\n- "更新Excel表格"\n- "修改PPT幻灯片"`
       }]);
       
       if (onLoadMCP) {
-        onLoadMCP(mcpData);
+        onLoadMCP({ tools: toolsDesc });
       }
     } catch (error) {
       console.error('Failed to load configuration:', error);
@@ -156,43 +148,95 @@ export default function ChatPanel({ docEditor, isEditorReady, files, onLoadMCP }
     setIsLoading(true);
 
     // Add user message
-    setMessages(prev => [...prev, { role: 'user', content: userMessage }]);
+    const newMessages = [...messages, { role: 'user', content: userMessage }];
+    setMessages(newMessages);
 
     try {
-      // If agent mode is enabled, try to process as agent command first
-      if (agentMode && isEditorReady) {
-        const agentResult = await processAgentCommand(userMessage);
-        if (agentResult) {
-          setMessages(prev => [...prev, { 
-            role: 'assistant', 
-            content: agentResult,
-            isAgent: true 
-          }]);
-          setIsLoading(false);
-          return;
-        }
-      }
+      // Build messages for API call (filter out system messages with tool descriptions)
+      const apiMessages = newMessages
+        .filter(m => m.role !== 'system')
+        .map(m => ({ role: m.role, content: m.content }));
 
-      // Otherwise, send to LLM using OpenAI SDK
-      const completion = await openai.chat.completions.create({
+      // Prepare API call configuration
+      const apiConfig = {
         model: 'deepseek-chat',
         messages: [
           {
             role: 'system',
             content: agentMode 
-              ? 'You are a helpful assistant with document automation capabilities. When users ask to modify documents, provide clear instructions or acknowledge successful operations.'
-              : 'You are a helpful assistant.'
+              ? '你是一个智能文档助手，可以帮助用户操作Word、Excel和PowerPoint文档。当用户要求编辑文档时，请调用相应的工具函数。用中文回复。'
+              : '你是一个有帮助的AI助手。用中文回复。'
           },
-          ...messages.map(m => ({ role: m.role, content: m.content })),
-          { role: 'user', content: userMessage }
+          ...apiMessages
         ],
         temperature: 0.7,
         max_tokens: 2000
-      });
+      };
 
-      const assistantMessage = completion.choices[0].message.content;
+      // Add tools if agent mode is enabled
+      if (agentMode && isEditorReady) {
+        apiConfig.tools = tools;
+        apiConfig.tool_choice = 'auto';
+      }
 
-      setMessages(prev => [...prev, { role: 'assistant', content: assistantMessage }]);
+      // Call LLM API
+      let completion = await openai.chat.completions.create(apiConfig);
+      let responseMessage = completion.choices[0].message;
+
+      // Handle tool calls
+      if (responseMessage.tool_calls && responseMessage.tool_calls.length > 0) {
+        // Add assistant's message with tool calls to conversation
+        const toolCallMessages = [...apiMessages, responseMessage];
+        
+        // Execute all tool calls
+        for (const toolCall of responseMessage.tool_calls) {
+          const functionName = toolCall.function.name;
+          const functionArgs = JSON.parse(toolCall.function.arguments || '{}');
+          
+          console.log(`🔧 LLM requested tool: ${functionName}`, functionArgs);
+          
+          // Execute the tool
+          const result = await executeToolCall(functionName, functionArgs, docEditor);
+          
+          // Add tool result to messages
+          toolCallMessages.push({
+            role: 'tool',
+            tool_call_id: toolCall.id,
+            name: functionName,
+            content: JSON.stringify(result)
+          });
+          
+          // Show tool execution in UI
+          setMessages(prev => [...prev, {
+            role: 'assistant',
+            content: `🔧 正在执行: ${functionName}\n结果: ${result.success ? '✅ 成功' : '❌ 失败: ' + result.error}`,
+            isAgent: true
+          }]);
+        }
+        
+        // Get final response from LLM after tool execution
+        const secondCompletion = await openai.chat.completions.create({
+          model: 'deepseek-chat',
+          messages: [
+            {
+              role: 'system',
+              content: '你是一个智能文档助手。根据工具执行结果，向用户简洁地报告操作完成情况。用中文回复。'
+            },
+            ...toolCallMessages
+          ],
+          temperature: 0.7,
+          max_tokens: 1000
+        });
+        
+        const finalMessage = secondCompletion.choices[0].message.content;
+        setMessages(prev => [...prev, { role: 'assistant', content: finalMessage }]);
+        
+      } else {
+        // No tool calls, just regular response
+        const assistantMessage = responseMessage.content;
+        setMessages(prev => [...prev, { role: 'assistant', content: assistantMessage }]);
+      }
+      
     } catch (error) {
       console.error('Chat error:', error);
       setMessages(prev => [...prev, { 
@@ -278,7 +322,7 @@ export default function ChatPanel({ docEditor, isEditorReady, files, onLoadMCP }
           value={input}
           onChange={(e) => setInput(e.target.value)}
           onKeyPress={handleKeyPress}
-          placeholder={agentMode ? "Ask me anything or command: 'insert text \"Hello\"', 'make bold', 'replace'..." : "Type your message..."}
+          placeholder={agentMode ? "例如：'帮我在文档中插入一个段落' 或 '更新Excel表格'..." : "输入您的消息..."}
           className="chat-input"
           rows={3}
           disabled={isLoading}
