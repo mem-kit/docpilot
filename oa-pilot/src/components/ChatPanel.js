@@ -1,4 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
+import OpenAI from 'openai';
 import config from '../config';
 import './ChatPanel.css';
 
@@ -8,6 +9,13 @@ export default function ChatPanel({ docEditor, isEditorReady, files, onLoadMCP }
   const [isLoading, setIsLoading] = useState(false);
   const [agentMode, setAgentMode] = useState(false);
   const messagesEndRef = useRef(null);
+
+  // Initialize OpenAI client with DeepSeek configuration
+  const openai = new OpenAI({
+    apiKey: config.llmAPIKey,
+    baseURL: config.llmURL.trim(), // Remove trailing space
+    dangerouslyAllowBrowser: true // Required for browser usage
+  });
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -34,15 +42,15 @@ export default function ChatPanel({ docEditor, isEditorReady, files, onLoadMCP }
       
       setMessages(prev => [...prev, {
         role: 'system',
-        content: `✅ MCP configuration loaded successfully. Agent mode enabled.\n\nAvailable tools: ${JSON.stringify(mcpData.tools || mcpData, null, 2)}`
+        content: `✅ Configuration loaded successfully. Agent mode enabled.\n\nAvailable tools: ${JSON.stringify(mcpData.tools || mcpData, null, 2)}`
       }]);
       
       if (onLoadMCP) {
         onLoadMCP(mcpData);
       }
     } catch (error) {
-      console.error('Failed to load MCP config:', error);
-      alert('Failed to load MCP configuration: ' + error.message);
+      console.error('Failed to load configuration:', error);
+      alert('Failed to load configuration: ' + error.message);
     }
   };
 
@@ -165,36 +173,24 @@ export default function ChatPanel({ docEditor, isEditorReady, files, onLoadMCP }
         }
       }
 
-      // Otherwise, send to LLM
-      const response = await fetch(`${config.llmURL}/chat/completions`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${config.llmAPIKey}`
-        },
-        body: JSON.stringify({
-          model: 'deepseek-chat',
-          messages: [
-            {
-              role: 'system',
-              content: agentMode 
-                ? 'You are a helpful assistant with document automation capabilities. When users ask to modify documents, provide clear instructions or acknowledge successful operations.'
-                : 'You are a helpful assistant.'
-            },
-            ...messages.map(m => ({ role: m.role, content: m.content })),
-            { role: 'user', content: userMessage }
-          ],
-          temperature: 0.7,
-          max_tokens: 2000
-        })
+      // Otherwise, send to LLM using OpenAI SDK
+      const completion = await openai.chat.completions.create({
+        model: 'deepseek-chat',
+        messages: [
+          {
+            role: 'system',
+            content: agentMode 
+              ? 'You are a helpful assistant with document automation capabilities. When users ask to modify documents, provide clear instructions or acknowledge successful operations.'
+              : 'You are a helpful assistant.'
+          },
+          ...messages.map(m => ({ role: m.role, content: m.content })),
+          { role: 'user', content: userMessage }
+        ],
+        temperature: 0.7,
+        max_tokens: 2000
       });
 
-      if (!response.ok) {
-        throw new Error(`API error: ${response.status} ${response.statusText}`);
-      }
-
-      const data = await response.json();
-      const assistantMessage = data.choices[0].message.content;
+      const assistantMessage = completion.choices[0].message.content;
 
       setMessages(prev => [...prev, { role: 'assistant', content: assistantMessage }]);
     } catch (error) {

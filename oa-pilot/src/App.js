@@ -4,6 +4,10 @@ import "./App.css";
 import FileList from "./components/FileList";
 import ChatPanel from "./components/ChatPanel";
 import EditorPanel from "./components/EditorPanel";
+import * as APIWord from "./extensions/APIWord";
+import * as APIExcel from "./extensions/APIExcel";
+import * as APIPowerPoint from "./extensions/APIPowerPoint";
+// import * as APIPDF from "./extensions/APIPDF"; // PDF support to be implemented
 
 const getDocumentType = (filename) => {
   if (!filename) return 'word';
@@ -16,7 +20,7 @@ const getDocumentType = (filename) => {
 
 export default function App() {
   const [files, setFiles] = React.useState([]);
-  const [selectedFile, setSelectedFile] = React.useState('new.docx');
+  const [selectedFile, setSelectedFile] = React.useState(null);
   const [docEditor, setDocEditor] = React.useState(null);
   const [isEditorReady, setIsEditorReady] = React.useState(false);
   const [leftPanelVisible, setLeftPanelVisible] = React.useState(true);
@@ -25,6 +29,7 @@ export default function App() {
   const [rightPanelWidth, setRightPanelWidth] = React.useState(400);
   const [isResizingLeft, setIsResizingLeft] = React.useState(false);
   const [isResizingRight, setIsResizingRight] = React.useState(false);
+  const [toolbarVisible, setToolbarVisible] = React.useState(true);
   const resizeStartX = useRef(0);
   const resizeStartWidth = useRef(0);
   
@@ -41,13 +46,9 @@ export default function App() {
       .then(data => {
         console.log('Available files:', data);
         setFiles(data);
-        // Set first file as default if available
-        if (data.length > 0 && !selectedFile) {
-          setSelectedFile(data[0].title);
-        }
       })
       .catch(err => console.error('Failed to load files:', err));
-  }, [selectedFile]);
+  }, []);
 
   // Handle file selection
   const handleFileSelect = (file) => {
@@ -111,205 +112,45 @@ export default function App() {
   
   // Function to update a paragraph in the document
   const updateParagraph = () => {
-    console.log('📝 updateParagraph clicked');
-    
-    if (!docEditor) {
-      console.error('Document editor not initialized yet');
-      alert('请等待文档加载完成后再试');
-      return;
-    }
-
-    // Check if createConnector is available (Standard API)
-    if (docEditor.createConnector) {
-      try {
-        const connector = docEditor.createConnector();
-        connector.callCommand(function() {
-          // eslint-disable-next-line no-undef
-          var oDocument = Api.GetDocument();
-          // eslint-disable-next-line no-undef
-          var oParagraph = Api.CreateParagraph();
-          oParagraph.AddText("这是新插入的段落 from React");
-          oDocument.InsertContent([oParagraph]);
-        }, function() {
-          console.log("Command executed successfully");
-        });
-      } catch (e) {
-        console.error("Connector error:", e);
-      }
-    } else {
-      // Fallback for environments where API is not fully available
-      console.warn("createConnector API not available on this Document Server");
-  
-    }
+    APIWord.updateParagraph(docEditor);
   };
 
   
   // Function to insert formatted text
   const insertFormattedText = () => {
-    console.log('✨ insertFormattedText clicked');
-    
-    if (!docEditor) {
-      console.error('Document editor not initialized yet');
-      alert('请等待文档加载完成后再试');
-      return;
-    }
-    
-    if (docEditor.createConnector) {
-      try {
-        const connector = docEditor.createConnector();
-        connector.callCommand(function() {
-          // eslint-disable-next-line no-undef
-          var oDocument = Api.GetDocument();
-          // eslint-disable-next-line no-undef
-          var oParagraph = Api.CreateParagraph();
-          
-          // Bold text
-          // eslint-disable-next-line no-undef
-          var oRunBold = Api.CreateRun();
-          oRunBold.SetBold(true);
-          oRunBold.AddText("Bold text");
-          oParagraph.AddElement(oRunBold);
-
-          // Normal text
-          // eslint-disable-next-line no-undef
-          var oRunNormal = Api.CreateRun();
-          oRunNormal.AddText(" and ");
-          oParagraph.AddElement(oRunNormal);
-
-          // Italic text
-          // eslint-disable-next-line no-undef
-          var oRunItalic = Api.CreateRun();
-          oRunItalic.SetItalic(true);
-          oRunItalic.AddText("italic text");
-          oParagraph.AddElement(oRunItalic);
-          
-          // Underline text
-          // eslint-disable-next-line no-undef
-          var oRunUnderline = Api.CreateRun();
-          oRunUnderline.SetUnderline(true);
-          oRunUnderline.AddText(" with underline");
-          oParagraph.AddElement(oRunUnderline);
-
-          oDocument.InsertContent([oParagraph]);
-        }, function() {
-          console.log("Formatted text inserted successfully");
-        });
-      } catch (e) {
-        console.error("Connector error:", e);
-      }
-    } else {
-      docEditor.showMessage('API Limitation', 'createConnector API not available', 'warning');
-    }
+    APIWord.insertFormattedText(docEditor);
   };
   
   // Function to replace current word
   const replaceCurrentWord = () => {
-    console.log('🔄 replaceCurrentWord clicked');
-    
-    if (!docEditor) {
-      console.error('Document editor not initialized yet');
-      alert('请等待文档加载完成后再试');
-      return;
-    }
-    
-    if (docEditor.createConnector) {
-      try {
-        const connector = docEditor.createConnector();
-        connector.callCommand(function() {
-          // eslint-disable-next-line no-undef
-          var oDocument = Api.GetDocument();
-          
-          // Try to get selection
-          // eslint-disable-next-line no-undef
-          var oRange = oDocument.GetRangeBySelect();
-          
-          // If selection is empty or collapsed, we might want to select the current word
-          // But for simplicity, let's just insert text at current position if nothing selected
-          // Or replace selection if something is selected
-          
-          // eslint-disable-next-line no-undef
-          oRange.SetText("REPLACED");
-          
-        }, function() {
-          console.log("Word replaced successfully");
-        });
-      } catch (e) {
-        console.error("Connector error:", e);
-      }
-    } else {
-      docEditor.showMessage('API Limitation', 'createConnector API not available', 'warning');
-    }
+    APIWord.replaceCurrentWord(docEditor);
   };
 
   // Function to update spreadsheet
   const updateSpreadsheet = () => {
-    console.log('📊 updateSpreadsheet clicked');
-    
-    if (!docEditor) {
-      console.error('Document editor not initialized yet');
-      alert('请等待文档加载完成后再试');
-      return;
-    }
-
-    if (docEditor.createConnector) {
-      try {
-        const connector = docEditor.createConnector();
-        connector.callCommand(function() {
-          // eslint-disable-next-line no-undef
-          var oWorksheet = Api.GetActiveSheet();
-          oWorksheet.GetRange("A1").SetValue("Hello from React");
-          oWorksheet.GetRange("A1").SetBold(true);
-          oWorksheet.GetRange("B1").SetValue("Updated via API");
-        }, function() {
-          console.log("Spreadsheet updated");
-        });
-      } catch (e) {
-        console.error("Connector error:", e);
-      }
-    }
+    APIExcel.updateSpreadsheet(docEditor);
   };
 
   // Function to update presentation
   const updatePresentation = () => {
-    console.log('📽️ updatePresentation clicked');
-    
-    if (!docEditor) {
-      console.error('Document editor not initialized yet');
-      alert('请等待文档加载完成后再试');
-      return;
-    }
-
-    if (docEditor.createConnector) {
-      try {
-        const connector = docEditor.createConnector();
-        connector.callCommand(function() {
-          // eslint-disable-next-line no-undef
-          var oPresentation = Api.GetPresentation();
-          var oSlide = oPresentation.GetSlideByIndex(0);
-          if (oSlide) {
-              var oShape = oSlide.GetAllShapes()[0];
-              if (oShape) {
-                   var oDocContent = oShape.GetDocContent();
-                   oDocContent.RemoveAllElements();
-                   var oParagraph = oDocContent.GetElement(0);
-                   oParagraph.AddText("Updated Slide from React");
-              }
-          }
-        }, function() {
-          console.log("Presentation updated");
-        });
-      } catch (e) {
-        console.error("Connector error:", e);
-      }
-    }
+    APIPowerPoint.updatePresentation(docEditor);
   };
   
   return (
     <div className="app-container">
       {/* Top toolbar */}
-      <div className="app-toolbar">
+      <div 
+        className="app-toolbar" 
+        style={{
+          height: toolbarVisible ? 'auto' : '0',
+          minHeight: toolbarVisible ? 'auto' : '0',
+          overflow: toolbarVisible ? 'visible' : 'hidden',
+          transition: toolbarVisible ? 'none' : 'all 0.3s ease',
+          position: 'relative'
+        }}
+      >
         <div className="toolbar-left">
-          <div style={{ fontWeight: 'bold', color: '#333' }}>SDK 测试功能：</div>
+          <div style={{ fontWeight: 'bold', color: '#333' }}>OA Pilot</div>
           
           {/* Status indicator */}
           <div style={{ 
@@ -406,7 +247,60 @@ export default function App() {
             </button>
           )}
         </div>
+        
+        {/* Toolbar toggle button */}
+        {toolbarVisible && (
+          <button 
+            onClick={() => setToolbarVisible(false)}
+            style={{
+              position: 'absolute',
+              right: '10px',
+              top: '50%',
+              transform: 'translateY(-50%)',
+              background: 'rgba(0, 0, 0, 0.1)',
+              border: 'none',
+              borderRadius: '4px',
+              padding: '4px 8px',
+              cursor: 'pointer',
+              fontSize: '14px',
+              color: '#666',
+              transition: 'all 0.2s'
+            }}
+            onMouseEnter={(e) => e.currentTarget.style.background = 'rgba(0, 0, 0, 0.2)'}
+            onMouseLeave={(e) => e.currentTarget.style.background = 'rgba(0, 0, 0, 0.1)'}
+            title="隐藏工具栏"
+          >
+            ▲
+          </button>
+        )}
       </div>
+      
+      {/* Show toolbar button when hidden */}
+      {!toolbarVisible && (
+        <div 
+          onClick={() => setToolbarVisible(true)}
+          style={{
+            position: 'absolute',
+            top: '0',
+            left: '50%',
+            transform: 'translateX(-50%)',
+            background: 'rgba(0, 0, 0, 0.1)',
+            border: 'none',
+            borderRadius: '0 0 8px 8px',
+            padding: '4px 16px',
+            cursor: 'pointer',
+            fontSize: '14px',
+            color: '#666',
+            transition: 'all 0.2s',
+            zIndex: 1000
+          }}
+          onMouseEnter={(e) => e.currentTarget.style.background = 'rgba(0, 0, 0, 0.2)'}
+          onMouseLeave={(e) => e.currentTarget.style.background = 'rgba(0, 0, 0, 0.1)'}
+          title="显示工具栏"
+        >
+          ▼
+        </div>
+      )}
       
       {/* Main content area with three panels */}
       <div className="app-content">

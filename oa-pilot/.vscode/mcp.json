@@ -1,0 +1,17 @@
+{
+  "servers": {
+    "camunda": {
+      "type": "stdio",
+      "command": "docker",
+      "args": [
+        "run",
+        "-i",
+        "--rm",
+        "mcp/camunda",
+        "-e",
+        "CAMUNDA_HOST=http://host.docker.internal:8080/engine-rest/"
+      ]
+    }
+  },
+  "inputs": []
+}

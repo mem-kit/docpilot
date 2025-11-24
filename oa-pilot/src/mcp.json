@@ -1,0 +1,33 @@
+{
+	"servers": {
+		"workflow": {
+
+		},
+		"smtp": {
+
+		},
+	},
+	"tools": {
+		"excel": {
+			"command": "ExcelAPI.js",
+			"type": "native"
+		},
+		"powerpoint": {
+			"command": "PowerPointAPI.js",
+			"type": "native"
+		},
+        "word": {
+			"command": "WordAPI.js",
+			"type": "native"
+		},
+        "pdf": {
+            "command": "PDFAPI.js",
+            "type": "native"
+        },
+		"storage": {
+			"command": "StorageAPI.js",
+			"type": "native"
+		}
+
+	}
+}
