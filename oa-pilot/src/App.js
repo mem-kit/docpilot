@@ -161,7 +161,7 @@ export default function App() {
             fontSize: '12px',
             fontWeight: 'bold'
           }}>
-            {isEditorReady ? '✓ 已就绪' : '⏳ 加载中...'}
+            {isEditorReady ? '✓ Ready' : '⏳ Loading...'}
           </div>
           
           {getDocumentType(selectedFile) === 'word' && (
@@ -178,7 +178,7 @@ export default function App() {
                   fontSize: '13px'
                 }}
               >
-                📝 更新段落
+                📝 Update paragraph
               </button>
               
               <button 
@@ -193,7 +193,7 @@ export default function App() {
                   fontSize: '13px'
                 }}
               >
-                ✨ 插入格式化文本
+                ✨ Insert formatted text
               </button>
               
               <button 
@@ -208,7 +208,7 @@ export default function App() {
                   fontSize: '13px'
                 }}
               >
-                🔄 替换当前单词
+                🔄 Replace current word
               </button>
             </>
           )}
@@ -226,7 +226,7 @@ export default function App() {
                 fontSize: '13px'
               }}
             >
-              📊 更新表格
+              📊 Update cell
             </button>
           )}
 
@@ -243,7 +243,7 @@ export default function App() {
                 fontSize: '13px'
               }}
             >
-              📽️ 更新幻灯片
+              📽️ Update presentation
             </button>
           )}
         </div>

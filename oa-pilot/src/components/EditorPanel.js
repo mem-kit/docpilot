@@ -348,11 +348,11 @@ export default function EditorPanel({ selectedFile, onEditorReady, onEditorChang
     <div className="editor-panel">
       {!selectedFile ? (
         <div className="editor-loading">
-          请从左侧文件列表中选择一个文档开始编辑
+          Please select one document to edit from left file list.
         </div>
       ) : isCleaningUp ? (
         <div className="editor-loading">
-          🧹 清理中...
+          🧹 Cleaning up...
         </div>
       ) : (
         <div key={`editor-wrapper-${documentKey}`} className="editor-wrapper">
