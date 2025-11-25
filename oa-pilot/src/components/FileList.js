@@ -31,116 +31,116 @@ export default function FileList({ onFileSelect, selectedFile }) {
   const createNewDocument = async (type) => {
     setShowCreateMenu(false);
     
-    // 提示用户输入文件名
+    // Prompt user to input file name
     const defaultNames = {
-      'word': '新建文档',
-      'excel': '新建表格',
-      'ppt': '新建演示',
-      'pdf': '新建文档'
+      'word': 'new_word_document',
+      'excel': 'new_excel_sheet',
+      'ppt': 'new_ppt_presentation',
+      'pdf': 'new_pdf_document'
     };
     
-    let fileName = prompt(`请输入文件名（不含扩展名，不允许空格）:`, defaultNames[type]);
+    let fileName = prompt(`Please input new file name (without extension, no spaces):`, defaultNames[type]);
     
-    // 用户取消或未输入
+    // User cancelled or didn't input anything
     if (!fileName) {
       return;
     }
     
-    // 移除空格并验证
+    // Remove spaces and validate
     fileName = fileName.trim().replace(/\s+/g, '');
     
     if (!fileName) {
-      alert('文件名不能为空！');
+      alert('File name cannot be empty!');
       return;
     }
     
     try {
-      // 使用 EngineStorage 创建文件
+      // Use EngineStorage to create file
       const result = await EngineStorage.createFile(type, fileName);
       
-      // 等待后端处理
+      // Wait for backend processing
       await new Promise(resolve => setTimeout(resolve, 500));
       
-      // 刷新文件列表
+      // Refresh file list
       await fetchFiles();
       
-      // 自动打开新建的文件
+      // Automatically open the newly created file
       if (onFileSelect) {
         onFileSelect({ title: result.filename, id: result.filename });
       }
       
     } catch (err) {
-      console.error('创建文档失败:', err);
-      alert(`创建文档失败: ${err.message}`);
-      setError(`创建文档失败: ${err.message}`);
+      console.error('Failed to create document:', err);
+      alert(`Failed to create document: ${err.message}`);
+      setError(`Failed to create document: ${err.message}`);
     }
   };
 
   const deleteFile = async (filename) => {
     // eslint-disable-next-line no-restricted-globals
-    if (!confirm(`确定要删除 "${filename}" 吗？`)) {
+    if (!confirm(`Are you sure you want to delete "${filename}"?`)) {
       return;
     }
     
     try {
-      // 使用 EngineStorage 删除文件
+      // Use EngineStorage to delete file
       await EngineStorage.deleteFile(filename);
       
-      // 刷新文件列表
+      // Refresh file list
       await fetchFiles();
       
-      // 如果删除的是当前打开的文件，清除选择
+      // If deleted file is currently open, clear selection
       if (selectedFile === filename && onFileSelect) {
         onFileSelect(null);
       }
       
     } catch (err) {
-      console.error('删除文件失败:', err);
-      alert(`删除文件失败: ${err.message}`);
+      console.error('Failed to delete file:', err);
+      alert(`Failed to delete file: ${err.message}`);
     }
   };
 
   const renameFile = async (oldFilename) => {
-    const newName = prompt('请输入新文件名（不含扩展名，不允许空格）:', oldFilename.replace(/\.[^.]+$/, ''));
+    const newName = prompt('Please enter new file name (without extension, no spaces):', oldFilename.replace(/\.[^.]+$/, ''));
     
     if (!newName) {
       return;
     }
     
-    // 移除空格并验证
+    // Remove spaces and validate
     const sanitizedName = newName.trim().replace(/\s+/g, '');
     
     if (!sanitizedName) {
-      alert('文件名不能为空！');
+      alert('File name cannot be empty!');
       return;
     }
     
-    // 保留原扩展名
+    // Keep original extension
     const extension = oldFilename.match(/\.[^.]+$/)?.[0] || '';
     const newFilename = sanitizedName + extension;
     
     if (newFilename === oldFilename) {
-      return; // 名称未改变
+      return; // Name unchanged
     }
     
     try {
       setRenamingFile(oldFilename);
       
-      // 使用 EngineStorage 重命名文件
+      // Use EngineStorage to rename file
       const result = await EngineStorage.renameFile(oldFilename, sanitizedName);
       const newFilename = result.newFilename;
       
-      // 刷新文件列表
+      // Refresh file list
       await fetchFiles();
       
-      // 如果重命名的是当前打开的文件，更新选择
+      // If renamed file is currently open, update selection
       if (selectedFile === oldFilename && onFileSelect) {
         onFileSelect({ title: newFilename, id: newFilename });
       }
       
     } catch (err) {
-      console.error('重命名文件失败:', err);
-      alert(`重命名文件失败: ${err.message}`);
+      console.error('Failed to rename file:', err);
+      alert(`Failed to rename file: ${err.message}`);
     } finally {
       setRenamingFile(null);
     }
@@ -197,28 +197,28 @@ export default function FileList({ onFileSelect, selectedFile }) {
             <button 
               onClick={() => setShowCreateMenu(!showCreateMenu)} 
               className="create-btn" 
-              title="新建文档"
+              title="Create New Document"
             >
               ➕
             </button>
             {showCreateMenu && (
               <div className="create-menu">
                 <div className="create-menu-item" onClick={() => createNewDocument('word')}>
-                  📄 Word 文档
+                  📄 Word Document
                 </div>
                 <div className="create-menu-item" onClick={() => createNewDocument('excel')}>
-                  📊 Excel 表格
+                  📊 Excel Spreadsheet
                 </div>
                 <div className="create-menu-item" onClick={() => createNewDocument('ppt')}>
-                  📽️ PowerPoint 演示
+                  📽️ PowerPoint Presentation
                 </div>
                 <div className="create-menu-item" onClick={() => createNewDocument('pdf')}>
-                  📕 PDF 文档
+                  📕 PDF Document
                 </div>
               </div>
             )}
           </div>
-          <button onClick={fetchFiles} className="refresh-btn" title="刷新">
+          <button onClick={fetchFiles} className="refresh-btn" title="Refresh">
             🔄
           </button>
         </div>
@@ -228,7 +228,7 @@ export default function FileList({ onFileSelect, selectedFile }) {
         {console.log('Rendering files, count:', files.length)}
         {files.length === 0 && !loading && (
           <div style={{padding: '20px', textAlign: 'center', color: '#999'}}>
-            没有文件
+            No files
           </div>
         )}
         {files.map((file, index) => {
@@ -251,7 +251,7 @@ export default function FileList({ onFileSelect, selectedFile }) {
                     renameFile(file.title);
                   }}
                   disabled={isRenaming}
-                  title="重命名"
+                  title="Rename"
                 >
                   {isRenaming ? '⏳' : '✏️'}
                 </button>
@@ -261,7 +261,7 @@ export default function FileList({ onFileSelect, selectedFile }) {
                     e.stopPropagation();
                     deleteFile(file.title);
                   }}
-                  title="删除"
+                  title="Delete"
                 >
                   🗑️
                 </button>

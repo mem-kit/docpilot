@@ -75,7 +75,16 @@ class EngineStorage {
 
       // 使用模板文件内容，以新文件名上传
       const formData = new FormData();
-      formData.append('uploadedFile', blob, fullFileName);
+      formData.append('file', blob, fullFileName);
+
+      console.log('Creating file:', {
+        type,
+        filename: sanitizedName,
+        fullFileName,
+        templateName,
+        blobSize: blob.size,
+        blobType: blob.type
+      });
 
       // 直接上传到 storage engine（支持 CORS）
       const uploadResponse = await fetch(`${config.storageEngineURL}example/upload`, {
@@ -83,8 +92,12 @@ class EngineStorage {
         body: formData
       });
 
+      console.log('Upload response status:', uploadResponse.status);
+
       if (!uploadResponse.ok) {
-        throw new Error(`上传失败: ${uploadResponse.status}`);
+        const errorText = await uploadResponse.text();
+        console.error('Upload error response:', errorText);
+        throw new Error(`上传失败 (${uploadResponse.status}): ${errorText}`);
       }
 
       const result = await uploadResponse.json();
@@ -158,7 +171,7 @@ class EngineStorage {
 
       // 2. 上传新文件
       const formData = new FormData();
-      formData.append('uploadedFile', blob, newFilename);
+      formData.append('file', blob, newFilename);
 
       const uploadResponse = await fetch(`${config.storageEngineURL}example/upload`, {
         method: 'POST',
@@ -246,7 +259,7 @@ class EngineStorage {
   static async uploadFile(blob, filename) {
     try {
       const formData = new FormData();
-      formData.append('uploadedFile', blob, filename);
+      formData.append('file', blob, filename);
 
       const response = await fetch(`${config.storageEngineURL}example/upload`, {
         method: 'POST',

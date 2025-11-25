@@ -366,12 +366,12 @@ export default function EditorPanel({ selectedFile, onEditorReady, onEditorChang
                 fileType: getFileType(selectedFile),
                 key: documentKey,
                 title: selectedFile,
-                url: `${config.storageEngineURL}example/download?fileName=${selectedFile}`,
+                url: `${config.storageEngineURL}example/download?fileName=${encodeURIComponent(selectedFile)}`,
               },
               documentType: getDocumentType(selectedFile),
               editorConfig: {
                 mode: "edit",
-                callbackUrl: `${config.storageEngineURL}example/track?filename=${selectedFile}`,
+                callbackUrl: `${config.storageEngineURL}example/track?filename=${encodeURIComponent(selectedFile)}`,
               },
             }}
             events_onAppReady={onAppReady}
