@@ -41,7 +41,7 @@ export default function App() {
   
   // Load files from OnlyOffice example storage
   React.useEffect(() => {
-    fetch(config.baseURL + 'example/files')
+    fetch(config.storageEngineURL + 'example/files')
       .then(res => res.json())
       .then(data => {
         console.log('Available files:', data);

@@ -17,7 +17,7 @@ class EngineStorage {
    */
   static async getFileList() {
     try {
-      const response = await fetch(`${config.baseURL}example/files`);
+      const response = await fetch(`${config.storageEngineURL}example/files`);
       if (!response.ok) {
         throw new Error(`HTTP error! status: ${response.status}`);
       }
@@ -77,8 +77,8 @@ class EngineStorage {
       const formData = new FormData();
       formData.append('uploadedFile', blob, fullFileName);
 
-      // 通过代理上传
-      const uploadResponse = await fetch('/example/upload', {
+      // 直接上传到 storage engine（支持 CORS）
+      const uploadResponse = await fetch(`${config.storageEngineURL}example/upload`, {
         method: 'POST',
         body: formData
       });
@@ -107,7 +107,7 @@ class EngineStorage {
    */
   static async deleteFile(filename) {
     try {
-      const response = await fetch(`/example/file?filename=${encodeURIComponent(filename)}`, {
+      const response = await fetch(`${config.storageEngineURL}example/file?filename=${encodeURIComponent(filename)}`, {
         method: 'DELETE',
         headers: {
           'Content-Type': 'text/xml',
@@ -150,7 +150,7 @@ class EngineStorage {
       }
 
       // 1. 下载原文件
-      const downloadResponse = await fetch(`${config.baseURL}example/download?fileName=${encodeURIComponent(oldFilename)}`);
+      const downloadResponse = await fetch(`${config.storageEngineURL}example/download?fileName=${encodeURIComponent(oldFilename)}`);
       if (!downloadResponse.ok) {
         throw new Error('下载文件失败');
       }
@@ -160,7 +160,7 @@ class EngineStorage {
       const formData = new FormData();
       formData.append('uploadedFile', blob, newFilename);
 
-      const uploadResponse = await fetch('/example/upload', {
+      const uploadResponse = await fetch(`${config.storageEngineURL}example/upload`, {
         method: 'POST',
         body: formData
       });
@@ -170,7 +170,7 @@ class EngineStorage {
       }
 
       // 3. 删除旧文件
-      const deleteResponse = await fetch(`/example/file?filename=${encodeURIComponent(oldFilename)}`, {
+      const deleteResponse = await fetch(`${config.storageEngineURL}example/file?filename=${encodeURIComponent(oldFilename)}`, {
         method: 'DELETE',
         headers: {
           'Content-Type': 'text/xml',
@@ -211,7 +211,7 @@ class EngineStorage {
       return {
         title: file.title,
         id: file.id || file.title,
-        url: `${config.baseURL}example/download?fileName=${filename}`
+        url: `${config.storageEngineURL}example/download?fileName=${filename}`
       };
     } catch (error) {
       console.error('Failed to open file:', error);
@@ -226,7 +226,7 @@ class EngineStorage {
    */
   static async downloadFile(filename) {
     try {
-      const response = await fetch(`${config.baseURL}example/download?fileName=${encodeURIComponent(filename)}`);
+      const response = await fetch(`${config.storageEngineURL}example/download?fileName=${encodeURIComponent(filename)}`);
       if (!response.ok) {
         throw new Error(`下载失败: ${response.status}`);
       }
@@ -248,7 +248,7 @@ class EngineStorage {
       const formData = new FormData();
       formData.append('uploadedFile', blob, filename);
 
-      const response = await fetch('/example/upload', {
+      const response = await fetch(`${config.storageEngineURL}example/upload`, {
         method: 'POST',
         body: formData
       });

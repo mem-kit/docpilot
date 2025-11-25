@@ -360,18 +360,18 @@ export default function EditorPanel({ selectedFile, onEditorReady, onEditorChang
             key={`${getDocumentType(selectedFile)}-${documentKey}`}
             ref={docEditorRef}
             id={editorId}
-            documentServerUrl={config.baseURL}
+            documentServerUrl={config.officeEngineURL}
             config={{
               document: {
                 fileType: getFileType(selectedFile),
                 key: documentKey,
                 title: selectedFile,
-                url: `${config.baseURL}example/download?fileName=${selectedFile}`,
+                url: `${config.storageEngineURL}example/download?fileName=${selectedFile}`,
               },
               documentType: getDocumentType(selectedFile),
               editorConfig: {
                 mode: "edit",
-                callbackUrl: `${config.baseURL}example/track?filename=${selectedFile}`,
+                callbackUrl: `${config.storageEngineURL}example/track?filename=${selectedFile}`,
               },
             }}
             events_onAppReady={onAppReady}
