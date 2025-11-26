@@ -12,12 +12,35 @@ import config from '../config';
 
 class EngineStorage {
   /**
+   * 获取文件夹列表
+   * @returns {Promise<Array<string>>} 文件夹列表
+   */
+  static async getFolderList() {
+    try {
+      const response = await fetch(`${config.storageEngineURL}example/folders`);
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+      const data = await response.json();
+      return data;
+    } catch (error) {
+      console.error('Failed to get folder list:', error);
+      throw error;
+    }
+  }
+
+  /**
    * 获取文件列表
+   * @param {string} folder - 文件夹名称（空字符串表示根目录）
    * @returns {Promise<Array>} 文件列表
    */
-  static async getFileList() {
+  static async getFileList(folder = '') {
     try {
-      const response = await fetch(`${config.storageEngineURL}example/files`);
+      const url = new URL(`${config.storageEngineURL}example/files`);
+      if (folder) {
+        url.searchParams.append('folder', folder);
+      }
+      const response = await fetch(url);
       if (!response.ok) {
         throw new Error(`HTTP error! status: ${response.status}`);
       }
@@ -33,9 +56,10 @@ class EngineStorage {
    * 创建新文件
    * @param {string} type - 文件类型: 'word', 'excel', 'ppt', 'pdf'
    * @param {string} filename - 文件名（不含扩展名）
+   * @param {string} folder - 文件夹名称（空字符串表示根目录）
    * @returns {Promise<Object>} 创建结果 { filename, documentType }
    */
-  static async createFile(type, filename) {
+  static async createFile(type, filename, folder = '') {
     try {
       // 文件名验证和清理
       const sanitizedName = filename.trim().replace(/\s+/g, '');
@@ -87,7 +111,11 @@ class EngineStorage {
       });
 
       // 直接上传到 storage engine（支持 CORS）
-      const uploadResponse = await fetch(`${config.storageEngineURL}example/upload`, {
+      const uploadUrl = new URL(`${config.storageEngineURL}example/upload`);
+      if (folder) {
+        uploadUrl.searchParams.append('folder', folder);
+      }
+      const uploadResponse = await fetch(uploadUrl, {
         method: 'POST',
         body: formData
       });
@@ -116,11 +144,17 @@ class EngineStorage {
   /**
    * 删除文件
    * @param {string} filename - 要删除的文件名
+   * @param {string} folder - 文件夹名称（空字符串表示根目录）
    * @returns {Promise<void>}
    */
-  static async deleteFile(filename) {
+  static async deleteFile(filename, folder = '') {
     try {
-      const response = await fetch(`${config.storageEngineURL}example/file?filename=${encodeURIComponent(filename)}`, {
+      const url = new URL(`${config.storageEngineURL}example/file`);
+      url.searchParams.append('filename', filename);
+      if (folder) {
+        url.searchParams.append('folder', folder);
+      }
+      const response = await fetch(url, {
         method: 'DELETE',
         headers: {
           'Content-Type': 'text/xml',
@@ -143,9 +177,10 @@ class EngineStorage {
    * 重命名文件（通过下载-上传-删除策略）
    * @param {string} oldFilename - 原文件名
    * @param {string} newName - 新文件名（不含扩展名）
+   * @param {string} folder - 文件夹名称（空字符串表示根目录）
    * @returns {Promise<Object>} { oldFilename, newFilename }
    */
-  static async renameFile(oldFilename, newName) {
+  static async renameFile(oldFilename, newName, folder = '') {
     try {
       // 文件名验证和清理
       const sanitizedName = newName.trim().replace(/\s+/g, '');
@@ -163,7 +198,12 @@ class EngineStorage {
       }
 
       // 1. 下载原文件
-      const downloadResponse = await fetch(`${config.storageEngineURL}example/download?fileName=${encodeURIComponent(oldFilename)}`);
+      const downloadUrl = new URL(`${config.storageEngineURL}example/download`);
+      downloadUrl.searchParams.append('fileName', oldFilename);
+      if (folder) {
+        downloadUrl.searchParams.append('folder', folder);
+      }
+      const downloadResponse = await fetch(downloadUrl);
       if (!downloadResponse.ok) {
         throw new Error('下载文件失败');
       }
@@ -173,7 +213,11 @@ class EngineStorage {
       const formData = new FormData();
       formData.append('file', blob, newFilename);
 
-      const uploadResponse = await fetch(`${config.storageEngineURL}example/upload`, {
+      const uploadUrl = new URL(`${config.storageEngineURL}example/upload`);
+      if (folder) {
+        uploadUrl.searchParams.append('folder', folder);
+      }
+      const uploadResponse = await fetch(uploadUrl, {
         method: 'POST',
         body: formData
       });
@@ -183,7 +227,12 @@ class EngineStorage {
       }
 
       // 3. 删除旧文件
-      const deleteResponse = await fetch(`${config.storageEngineURL}example/file?filename=${encodeURIComponent(oldFilename)}`, {
+      const deleteUrl = new URL(`${config.storageEngineURL}example/file`);
+      deleteUrl.searchParams.append('filename', oldFilename);
+      if (folder) {
+        deleteUrl.searchParams.append('folder', folder);
+      }
+      const deleteResponse = await fetch(deleteUrl, {
         method: 'DELETE',
         headers: {
           'Content-Type': 'text/xml',
@@ -207,12 +256,13 @@ class EngineStorage {
   /**
    * 打开文件（返回文件信息用于编辑器加载）
    * @param {string} filename - 要打开的文件名
+   * @param {string} folder - 文件夹名称（空字符串表示根目录）
    * @returns {Promise<Object>} 文件信息 { title, id, url }
    */
-  static async openFile(filename) {
+  static async openFile(filename, folder = '') {
     try {
       // 验证文件是否存在
-      const files = await this.getFileList();
+      const files = await this.getFileList(folder);
       const file = files.find(f => f.title === filename);
 
       if (!file) {
@@ -221,10 +271,16 @@ class EngineStorage {
 
       console.log('Opening file:', filename);
 
+      const downloadUrl = new URL(`${config.storageEngineURL}example/download`);
+      downloadUrl.searchParams.append('fileName', filename);
+      if (folder) {
+        downloadUrl.searchParams.append('folder', folder);
+      }
+      
       return {
         title: file.title,
         id: file.id || file.title,
-        url: `${config.storageEngineURL}example/download?fileName=${filename}`
+        url: downloadUrl.toString()
       };
     } catch (error) {
       console.error('Failed to open file:', error);
@@ -235,11 +291,17 @@ class EngineStorage {
   /**
    * 下载文件内容
    * @param {string} filename - 文件名
+   * @param {string} folder - 文件夹名称（空字符串表示根目录）
    * @returns {Promise<Blob>} 文件内容
    */
-  static async downloadFile(filename) {
+  static async downloadFile(filename, folder = '') {
     try {
-      const response = await fetch(`${config.storageEngineURL}example/download?fileName=${encodeURIComponent(filename)}`);
+      const url = new URL(`${config.storageEngineURL}example/download`);
+      url.searchParams.append('fileName', filename);
+      if (folder) {
+        url.searchParams.append('folder', folder);
+      }
+      const response = await fetch(url);
       if (!response.ok) {
         throw new Error(`下载失败: ${response.status}`);
       }
@@ -254,14 +316,19 @@ class EngineStorage {
    * 上传文件
    * @param {Blob} blob - 文件内容
    * @param {string} filename - 文件名
+   * @param {string} folder - 文件夹名称（空字符串表示根目录）
    * @returns {Promise<Object>} 上传结果
    */
-  static async uploadFile(blob, filename) {
+  static async uploadFile(blob, filename, folder = '') {
     try {
       const formData = new FormData();
       formData.append('file', blob, filename);
 
-      const response = await fetch(`${config.storageEngineURL}example/upload`, {
+      const url = new URL(`${config.storageEngineURL}example/upload`);
+      if (folder) {
+        url.searchParams.append('folder', folder);
+      }
+      const response = await fetch(url, {
         method: 'POST',
         body: formData
       });

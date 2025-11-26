@@ -58,7 +58,7 @@ const getDocumentType = (filename) => {
   return 'word'; // default
 };
 
-export default function EditorPanel({ selectedFile, onEditorReady, onEditorChange }) {
+export default function EditorPanel({ selectedFile, selectedWorkspace = '', onEditorReady, onEditorChange }) {
   const docEditorRef = useRef(null);
   const [isCleaningUp, setIsCleaningUp] = React.useState(false);
   
@@ -366,12 +366,12 @@ export default function EditorPanel({ selectedFile, onEditorReady, onEditorChang
                 fileType: getFileType(selectedFile),
                 key: documentKey,
                 title: selectedFile,
-                url: `${config.storageEngineURL}example/download?fileName=${encodeURIComponent(selectedFile)}`,
+                url: `${config.storageEngineURL}example/download?fileName=${encodeURIComponent(selectedFile)}${selectedWorkspace ? `&folder=${encodeURIComponent(selectedWorkspace)}` : ''}`,
               },
               documentType: getDocumentType(selectedFile),
               editorConfig: {
                 mode: "edit",
-                callbackUrl: `${config.storageEngineURL}example/track?filename=${encodeURIComponent(selectedFile)}`,
+                callbackUrl: `${config.storageEngineURL}example/track?filename=${encodeURIComponent(selectedFile)}${selectedWorkspace ? `&folder=${encodeURIComponent(selectedWorkspace)}` : ''}`,
               },
             }}
             events_onAppReady={onAppReady}

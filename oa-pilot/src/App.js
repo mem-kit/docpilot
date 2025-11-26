@@ -21,6 +21,9 @@ const getDocumentType = (filename) => {
 export default function App() {
   const [files, setFiles] = React.useState([]);
   const [selectedFile, setSelectedFile] = React.useState(null);
+  const [selectedWorkspace, setSelectedWorkspace] = React.useState(() => {
+    return localStorage.getItem('selectedWorkspace') || '';
+  });
   const [docEditor, setDocEditor] = React.useState(null);
   const [isEditorReady, setIsEditorReady] = React.useState(false);
   const [leftPanelVisible, setLeftPanelVisible] = React.useState(true);
@@ -52,8 +55,32 @@ export default function App() {
 
   // Handle file selection
   const handleFileSelect = (file) => {
-    setSelectedFile(file.title);
+    if (file && file.title) {
+      setSelectedFile(file.title);
+    } else {
+      setSelectedFile('');
+    }
   };
+
+  // Sync workspace from localStorage (in case FileList changes it)
+  React.useEffect(() => {
+    const handleStorageChange = () => {
+      const newWorkspace = localStorage.getItem('selectedWorkspace') || '';
+      setSelectedWorkspace(newWorkspace);
+    };
+    
+    window.addEventListener('storage', handleStorageChange);
+    
+    // Also check on mount and at intervals
+    const interval = setInterval(() => {
+      handleStorageChange();
+    }, 500);
+    
+    return () => {
+      window.removeEventListener('storage', handleStorageChange);
+      clearInterval(interval);
+    };
+  }, []);
 
   // Handle MCP config load
   const handleLoadMCP = () => {
@@ -350,6 +377,7 @@ export default function App() {
         <div className="center-panel">
           <EditorPanel 
             selectedFile={selectedFile}
+            selectedWorkspace={selectedWorkspace}
             onEditorReady={handleEditorReady}
           />
         </div>

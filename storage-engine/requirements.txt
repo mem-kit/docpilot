@@ -1,5 +1,37 @@
+# Web Framework
 fastapi
 uvicorn[standard]
 python-multipart
+
+# Async IO
 aiofiles
 httpx
+
+# LangChain Core
+langchain
+langchain-community
+langchain-openai
+langchain-huggingface
+langchain-text-splitters
+langchain-core
+
+# Document Loaders
+pypdf
+docx2txt
+extract_msg
+unstructured
+python-magic
+
+# Vector Store
+faiss-cpu
+
+# Embeddings Models
+sentence-transformers
+transformers
+
+# Utilities
+python-dotenv
+tiktoken
+
+# Optional: DeepSeek SDK
+deepseek

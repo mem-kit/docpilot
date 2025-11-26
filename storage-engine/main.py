@@ -1,6 +1,5 @@
 import os
 import re
-import shutil
 from datetime import datetime
 from pathlib import Path
 from typing import List, Optional
@@ -11,6 +10,8 @@ from fastapi import FastAPI, File, UploadFile, HTTPException, Query, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse
 from pydantic import BaseModel
+
+# Import RAG modules
 
 # Create FastAPI application
 app = FastAPI(
@@ -54,6 +55,19 @@ class OnlyOfficeCallback(BaseModel):
     users: Optional[List[str]] = None
     actions: Optional[List[dict]] = None
     history: Optional[dict] = None
+
+
+class QueryRequest(BaseModel):
+    """RAG查询请求模型"""
+    query: str
+    top_k: int = 5
+
+
+class QueryResult(BaseModel):
+    """RAG查询结果模型"""
+    content: str
+    source: str
+    score: Optional[float] = None
 
 
 def format_file_size(size_bytes: int) -> str:
@@ -154,10 +168,18 @@ async def root():
 
 
 @app.get("/example/files", response_model=List[FileInfo])
-async def list_files():
-    """List all files"""
+async def list_files(folder: str = Query("", description="Subfolder name (empty for root)")):
+    """List all files in the specified folder"""
+    target_dir = UPLOAD_DIR / folder if folder else UPLOAD_DIR
+    
+    if not target_dir.exists():
+        raise HTTPException(status_code=404, detail="Folder does not exist")
+    
+    if not target_dir.is_dir():
+        raise HTTPException(status_code=400, detail="Not a valid folder")
+    
     files = []
-    for file_path in UPLOAD_DIR.iterdir():
+    for file_path in target_dir.iterdir():
         if file_path.is_file():
             try:
                 file_info = get_file_info(file_path)
@@ -170,10 +192,27 @@ async def list_files():
     return files
 
 
+@app.get("/example/folders", response_model=List[str])
+async def list_folders():
+    """List all folders in the docs directory"""
+    folders = []
+    for item in UPLOAD_DIR.iterdir():
+        if item.is_dir():
+            folders.append(item.name)
+    
+    # Sort folders alphabetically
+    folders.sort()
+    return folders
+
+
 @app.delete("/example/file")
-async def delete_file(filename: str = Query(..., description="Filename to delete")):
-    """Delete file"""
-    file_path = UPLOAD_DIR / filename
+async def delete_file(
+    filename: str = Query(..., description="Filename to delete"),
+    folder: str = Query("", description="Subfolder name (empty for root)")
+):
+    """Delete file from specified folder"""
+    target_dir = UPLOAD_DIR / folder if folder else UPLOAD_DIR
+    file_path = target_dir / filename
     
     if not file_path.exists():
         raise HTTPException(status_code=404, detail="File does not exist")
@@ -183,8 +222,15 @@ async def delete_file(filename: str = Query(..., description="Filename to delete
     
     try:
         file_path.unlink()
+        
+        # 触发RAG索引重建
+        try:
+            rebuild_rag_index()
+        except Exception as e:
+            print(f"⚠️  RAG索引重建失败: {e}")
+        
         return JSONResponse(
-            content={"message": "File deleted successfully", "filename": filename},
+            content={"message": "File deleted successfully", "filename": filename, "folder": folder},
             status_code=200
         )
     except Exception as e:
@@ -192,17 +238,24 @@ async def delete_file(filename: str = Query(..., description="Filename to delete
 
 
 @app.post("/example/upload")
-async def upload_file(file: UploadFile = File(...)):
-    """Upload file"""
+async def upload_file(
+    file: UploadFile = File(...),
+    folder: str = Query("", description="Subfolder name (empty for root)")
+):
+    """Upload file to specified folder"""
     if not file.filename:
         raise HTTPException(status_code=400, detail="Filename cannot be empty")
+    
+    # 确定目标目录
+    target_dir = UPLOAD_DIR / folder if folder else UPLOAD_DIR
+    target_dir.mkdir(parents=True, exist_ok=True)
     
     # 1. 清理文件名，替换空格和特殊字符为下划线
     sanitized_filename = sanitize_filename(file.filename)
     
     # 2. 获取唯一文件名（如果重复则自动添加后缀）
-    unique_filename = get_unique_filename(UPLOAD_DIR, sanitized_filename)
-    file_path = UPLOAD_DIR / unique_filename
+    unique_filename = get_unique_filename(target_dir, sanitized_filename)
+    file_path = target_dir / unique_filename
     
     try:
         # Write file asynchronously
@@ -215,6 +268,7 @@ async def upload_file(file: UploadFile = File(...)):
         response_content = {
             "message": "File uploaded successfully",
             "filename": unique_filename,
+            "folder": folder,
             "size": file_info.contentLength,
             "file_info": file_info.dict()
         }
@@ -230,6 +284,12 @@ async def upload_file(file: UploadFile = File(...)):
             response_content["message"] = f"File uploaded successfully (filename automatically adjusted: {', '.join(filename_changed)})"
             response_content["original_filename"] = file.filename
         
+        # 触发RAG索引重建
+        try:
+            rebuild_rag_index()
+        except Exception as e:
+            print(f"⚠️  RAG索引重建失败: {e}")
+        
         return JSONResponse(
             content=response_content,
             status_code=200
@@ -239,9 +299,13 @@ async def upload_file(file: UploadFile = File(...)):
 
 
 @app.get("/example/download")
-async def download_file(fileName: str = Query(..., description="Filename to download")):
-    """Download file"""
-    file_path = UPLOAD_DIR / fileName
+async def download_file(
+    fileName: str = Query(..., description="Filename to download"),
+    folder: str = Query("", description="Subfolder name (empty for root)")
+):
+    """Download file from specified folder"""
+    target_dir = UPLOAD_DIR / folder if folder else UPLOAD_DIR
+    file_path = target_dir / fileName
     
     if not file_path.exists():
         raise HTTPException(status_code=404, detail="File does not exist")
@@ -257,7 +321,11 @@ async def download_file(fileName: str = Query(..., description="Filename to down
 
 
 @app.post("/example/track")
-async def track_callback(request: Request, filename: str = Query(..., description="Filename being edited")):
+async def track_callback(
+    request: Request,
+    filename: str = Query(..., description="Filename being edited"),
+    folder: str = Query("", description="Subfolder name (empty for root)")
+):
     """
     OnlyOffice Document Server callback endpoint
     
@@ -292,7 +360,9 @@ async def track_callback(request: Request, filename: str = Query(..., descriptio
                 response.raise_for_status()
                 
                 # Save the edited document back to storage
-                file_path = UPLOAD_DIR / filename
+                target_dir = UPLOAD_DIR / folder if folder else UPLOAD_DIR
+                target_dir.mkdir(parents=True, exist_ok=True)
+                file_path = target_dir / filename
                 async with aiofiles.open(file_path, 'wb') as f:
                     await f.write(response.content)
                 
@@ -303,6 +373,12 @@ async def track_callback(request: Request, filename: str = Query(..., descriptio
                     print(f"   Reason: User closed editor with changes")
                 elif callback_data.status == 6:
                     print(f"   Reason: Force save (type: {callback_data.forcesavetype})")
+                
+                # 触发RAG索引重建
+                try:
+                    rebuild_rag_index()
+                except Exception as e:
+                    print(f"⚠️  RAG索引重建失败: {e}")
         
         # Status 1: Document being edited (user connected)
         elif callback_data.status == 1:
@@ -332,6 +408,73 @@ async def track_callback(request: Request, filename: str = Query(..., descriptio
         return JSONResponse(content={"error": 1, "message": str(e)})
 
 
+@app.post("/example/search", response_model=List[QueryResult])
+async def search_documents(request: QueryRequest):
+    """
+    RAG文档检索接口
+    
+    Args:
+        request: 包含查询文本和返回数量的请求
+        
+    Returns:
+        相关文档片段列表
+    """
+    try:
+        vectorstore = get_rag_index()
+        
+        if vectorstore is None:
+            raise HTTPException(
+                status_code=503,
+                detail="RAG索引未就绪,请先上传文档"
+            )
+        
+        # 执行相似度搜索
+        results = vectorstore.similarity_search_with_score(
+            request.query,
+            k=request.top_k
+        )
+        
+        # 格式化结果
+        query_results = []
+        for doc, score in results:
+            query_results.append(QueryResult(
+                content=doc.page_content,
+                source=doc.metadata.get("source", "unknown"),
+                score=float(score)
+            ))
+        
+        return query_results
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"检索失败: {str(e)}"
+        )
+
+
+@app.post("/example/rebuild-index")
+async def rebuild_index_endpoint():
+    """
+    手动触发RAG索引重建
+    
+    Returns:
+        重建状态消息
+    """
+    try:
+        rebuild_rag_index()
+        return JSONResponse(
+            content={"message": "RAG索引重建成功"},
+            status_code=200
+        )
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"索引重建失败: {str(e)}"
+        )
+
+
 @app.on_event("startup")
 async def startup_event():
     """Server startup event"""
@@ -343,6 +486,7 @@ async def startup_event():
     print(f"📁 API endpoints: http://localhost:{port}/example/")
     print(f"📖 API docs (Swagger): http://localhost:{port}/docs")
     print(f"💾 File storage directory: {UPLOAD_DIR.resolve()}")
+    print(f"🔍 RAG search endpoint: http://localhost:{port}/example/search")
     print(f"{'='*60}\n")
 
 

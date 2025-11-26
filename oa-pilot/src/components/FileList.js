@@ -8,15 +8,33 @@ export default function FileList({ onFileSelect, selectedFile }) {
   const [error, setError] = useState(null);
   const [showCreateMenu, setShowCreateMenu] = useState(false);
   const [renamingFile, setRenamingFile] = useState(null);
+  const [folders, setFolders] = useState([]);
+  const [selectedWorkspace, setSelectedWorkspace] = useState(() => {
+    return localStorage.getItem('selectedWorkspace') || '';
+  });
+
+  useEffect(() => {
+    fetchFolders();
+  }, []);
 
   useEffect(() => {
     fetchFiles();
-  }, []);
+  }, [selectedWorkspace]);
+
+  const fetchFolders = async () => {
+    try {
+      const data = await EngineStorage.getFolderList();
+      console.log('Available folders:', data);
+      setFolders(data);
+    } catch (err) {
+      console.error('Failed to load folders:', err);
+    }
+  };
 
   const fetchFiles = async () => {
     try {
       setLoading(true);
-      const data = await EngineStorage.getFileList();
+      const data = await EngineStorage.getFileList(selectedWorkspace);
       console.log('Available files:', data);
       setFiles(data);
       setError(null);
@@ -56,7 +74,7 @@ export default function FileList({ onFileSelect, selectedFile }) {
     
     try {
       // Use EngineStorage to create file
-      const result = await EngineStorage.createFile(type, fileName);
+      const result = await EngineStorage.createFile(type, fileName, selectedWorkspace);
       
       // Wait for backend processing
       await new Promise(resolve => setTimeout(resolve, 500));
@@ -84,7 +102,7 @@ export default function FileList({ onFileSelect, selectedFile }) {
     
     try {
       // Use EngineStorage to delete file
-      await EngineStorage.deleteFile(filename);
+      await EngineStorage.deleteFile(filename, selectedWorkspace);
       
       // Refresh file list
       await fetchFiles();
@@ -127,7 +145,7 @@ export default function FileList({ onFileSelect, selectedFile }) {
       setRenamingFile(oldFilename);
       
       // Use EngineStorage to rename file
-      const result = await EngineStorage.renameFile(oldFilename, sanitizedName);
+      const result = await EngineStorage.renameFile(oldFilename, sanitizedName, selectedWorkspace);
       const newFilename = result.newFilename;
       
       // Refresh file list
@@ -143,6 +161,17 @@ export default function FileList({ onFileSelect, selectedFile }) {
       alert(`Failed to rename file: ${err.message}`);
     } finally {
       setRenamingFile(null);
+    }
+  };
+
+  const handleWorkspaceChange = (e) => {
+    const newWorkspace = e.target.value;
+    setSelectedWorkspace(newWorkspace);
+    localStorage.setItem('selectedWorkspace', newWorkspace);
+    
+    // Clear current file selection when switching workspace
+    if (onFileSelect) {
+      onFileSelect(null);
     }
   };
 
@@ -269,6 +298,23 @@ export default function FileList({ onFileSelect, selectedFile }) {
             </div>
           );
         })}
+      </div>
+
+      <div className="workspace-selector">
+        <label htmlFor="workspace-dropdown">Workspace:</label>
+        <select 
+          id="workspace-dropdown"
+          value={selectedWorkspace} 
+          onChange={handleWorkspaceChange}
+          className="workspace-dropdown"
+        >
+          <option value="">Root (Default)</option>
+          {folders.map((folder) => (
+            <option key={folder} value={folder}>
+              {folder}
+            </option>
+          ))}
+        </select>
       </div>
     </div>
   );
