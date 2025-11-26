@@ -1,9 +1,14 @@
 #!/bin/bash
 
+
 # 切换目录
 cd /home/oa-pilot
 
-nohup npm start > npm.log 2>&1 &
+# 导入 .env 文件
+export PORT=80
+
+# 用 sudo 启动 npm（80 端口需要管理员权限）
+nohup sudo npm start > npm.log 2>&1 &
 
 # 保存进程 ID
 echo $! > npm.pid

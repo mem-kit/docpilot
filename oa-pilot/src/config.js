@@ -1,8 +1,8 @@
 // config.js
 const config = {
   // OnlyOffice Document Server URL (用于编辑器)
-  // Example: http://49.235.156.4/example/
-  officeEngineURL: "http://49.235.156.4/",
+  // Example: http://49.235.156.4:7171/example/
+  officeEngineURL: "http://49.235.156.4:7171/",
   
   // 文档存储 URL - 自建 Storage Engine，支持 CORS
   // Swagger 地址: http://111.229.40.154/docs/
