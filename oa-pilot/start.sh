@@ -5,7 +5,7 @@
 cd /home/oa-pilot
 
 # 导入 .env 文件
-export PORT=80
+export PORT=3000
 
 # 用 sudo 启动 npm（80 端口需要管理员权限）
 nohup sudo npm start > npm.log 2>&1 &

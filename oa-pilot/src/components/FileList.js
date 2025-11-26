@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import EngineStorage from '../extensions/EngineStorage';
 import './FileList.css';
 
@@ -12,6 +12,8 @@ export default function FileList({ onFileSelect, selectedFile }) {
   const [selectedWorkspace, setSelectedWorkspace] = useState(() => {
     return localStorage.getItem('selectedWorkspace') || '';
   });
+  const [uploading, setUploading] = useState(false);
+  const fileInputRef = useRef(null);
 
   useEffect(() => {
     fetchFolders();
@@ -36,7 +38,23 @@ export default function FileList({ onFileSelect, selectedFile }) {
       setLoading(true);
       const data = await EngineStorage.getFileList(selectedWorkspace);
       console.log('Available files:', data);
-      setFiles(data);
+      
+      // Sort files: dot files first, then alphabetically
+      const sortedFiles = [...data].sort((a, b) => {
+        const aName = a.title || '';
+        const bName = b.title || '';
+        const aStartsWithDot = aName.startsWith('.');
+        const bStartsWithDot = bName.startsWith('.');
+        
+        // If one starts with dot and the other doesn't, dot file comes first
+        if (aStartsWithDot && !bStartsWithDot) return -1;
+        if (!aStartsWithDot && bStartsWithDot) return 1;
+        
+        // Otherwise, sort alphabetically (case-insensitive)
+        return aName.toLowerCase().localeCompare(bName.toLowerCase());
+      });
+      
+      setFiles(sortedFiles);
       setError(null);
     } catch (err) {
       console.error('Failed to load files:', err);
@@ -175,6 +193,55 @@ export default function FileList({ onFileSelect, selectedFile }) {
     }
   };
 
+  const handleUploadClick = () => {
+    fileInputRef.current?.click();
+  };
+
+  const handleFileUpload = async (e) => {
+    const selectedFiles = Array.from(e.target.files || []);
+    
+    if (selectedFiles.length === 0) {
+      return;
+    }
+
+    setUploading(true);
+    
+    try {
+      let successCount = 0;
+      let failCount = 0;
+      
+      for (const file of selectedFiles) {
+        try {
+          await EngineStorage.uploadFile(file, file.name, selectedWorkspace);
+          successCount++;
+        } catch (err) {
+          console.error(`Failed to upload ${file.name}:`, err);
+          failCount++;
+        }
+      }
+      
+      // Show result message
+      if (failCount === 0) {
+        alert(`Successfully uploaded ${successCount} file(s)`);
+      } else {
+        alert(`Uploaded ${successCount} file(s), ${failCount} failed`);
+      }
+      
+      // Refresh file list
+      await fetchFiles();
+      
+    } catch (err) {
+      console.error('Upload error:', err);
+      alert(`Upload failed: ${err.message}`);
+    } finally {
+      setUploading(false);
+      // Reset file input
+      if (fileInputRef.current) {
+        fileInputRef.current.value = '';
+      }
+    }
+  };
+
   const getFileIcon = (filename) => {
     const ext = filename.split('.').pop().toLowerCase();
     if (['doc', 'docx'].includes(ext)) return '📄';
@@ -247,9 +314,24 @@ export default function FileList({ onFileSelect, selectedFile }) {
               </div>
             )}
           </div>
+          <button 
+            onClick={handleUploadClick} 
+            className="upload-btn" 
+            title="Upload Files"
+            disabled={uploading}
+          >
+            {uploading ? '⏳' : '📤'}
+          </button>
           <button onClick={fetchFiles} className="refresh-btn" title="Refresh">
             🔄
           </button>
+          <input
+            ref={fileInputRef}
+            type="file"
+            multiple
+            onChange={handleFileUpload}
+            style={{ display: 'none' }}
+          />
         </div>
       </div>
 

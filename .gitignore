@@ -138,5 +138,5 @@ dist
 vite.config.js.timestamp-*
 vite.config.ts.timestamp-*
 .DS_Store
-storage-engine/__pycache__/main.cpython-313.pyc
+**/__pycache__**
 docpilot-react-app/build/
