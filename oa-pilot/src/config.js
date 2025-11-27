@@ -13,6 +13,11 @@ const config = {
   llmAPIKey: "sk-ee6e7d4d0c6c441fa82d92061694ecf2",
   
   mcpConfig: "mcp.json",
+  
+  // MCP 代理配置
+  // 在开发环境中，使用代理路径避免 CORS 问题
+  // /api/mcp 会被代理到 http://localhost:8000/mcp
+  mcpProxyPath: "/api/mcp",
 }
 
 export default config;

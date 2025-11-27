@@ -414,6 +414,7 @@ export default function App() {
             isEditorReady={isEditorReady}
             files={files}
             onLoadMCP={handleLoadMCP}
+            selectedWorkspace={selectedWorkspace}
           />
         </div>
         {!rightPanelVisible && (

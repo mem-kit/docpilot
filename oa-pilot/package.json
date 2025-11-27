@@ -45,6 +45,7 @@
     ]
   },
   "devDependencies": {
-    "concurrently": "^9.2.1"
+    "concurrently": "^9.2.1",
+    "http-proxy-middleware": "^3.0.5"
   }
 }
