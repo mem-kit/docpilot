@@ -3,6 +3,7 @@ import OpenAI from 'openai';
 import config from '../config';
 import './ChatPanel.css';
 import { tools as documentTools, executeToolCall, getToolsDescription } from '../extensions/EngineDocument';
+import { tools as storageTools, executeToolCall as executeStorageToolCall, getToolsDescription as getStorageToolsDescription } from '../extensions/EngineStorageTools';
 import EngineMCP from '../extensions/EngineMCP';
 
 export default function ChatPanel({ docEditor, isEditorReady, files, onLoadMCP, selectedWorkspace }) {
@@ -112,16 +113,17 @@ export default function ChatPanel({ docEditor, isEditorReady, files, onLoadMCP, 
     
     if (newMode === 'agent') {
       const toolsDesc = getToolsDescription();
+      const storageToolsDesc = getStorageToolsDescription();
       const mcpToolsDesc = mcpTools.map(t => ({
         name: t.function.name,
         description: t.function.description
       }));
       
-      const allToolsDesc = [...toolsDesc, ...mcpToolsDesc];
+      const allToolsDesc = [...toolsDesc, ...storageToolsDesc, ...mcpToolsDesc];
       
       setMessages(prev => [...prev, {
         role: 'system',
-        content: `🤖 Switched to Agent Mode\n\n📋 Available tools:\n${allToolsDesc.map((t, i) => `${i + 1}. ${t.name}: ${t.description}`).join('\n')}\n\n💡 Example commands:\n- "Add a paragraph to the document"\n- "Insert formatted text"\n- "Update Excel spreadsheet"\n- "Modify PPT slide"${mcpTools.length > 0 ? `\n\n🔌 MCP Tools (${mcpTools.length}):\n${mcpToolsDesc.map((t, i) => `- ${t.name}: ${t.description}`).join('\n')}` : ''}`
+        content: `🤖 Switched to Agent Mode\n\n📋 Document Tools (${toolsDesc.length}):\n${toolsDesc.map((t, i) => `${i + 1}. ${t.name}: ${t.description}`).join('\n')}\n\n📁 Storage Tools (${storageToolsDesc.length}):\n${storageToolsDesc.map((t, i) => `${i + 1}. ${t.name}: ${t.description}`).join('\n')}\n\n💡 Example commands:\n- "Add a paragraph to the document"\n- "List all files in workspace"\n- "Create a new Excel file named 'report'"\n- "Get download URL for invoice.docx"${mcpTools.length > 0 ? `\n\n🔌 MCP Tools (${mcpTools.length}):\n${mcpToolsDesc.map((t, i) => `- ${t.name}: ${t.description}`).join('\n')}` : ''}`
       }]);
       
       if (onLoadMCP) {
@@ -162,20 +164,29 @@ export default function ChatPanel({ docEditor, isEditorReady, files, onLoadMCP, 
           {
             role: 'system',
             content: mode === 'agent' 
-              ? `你是一个智能文档助手，可以帮助用户操作Word、Excel和PowerPoint文档。
+              ? `你是一个智能文档助手，可以帮助用户操作Word、Excel和PowerPoint文档，并管理文件存储。
 
-可用工具：
+【文档编辑工具】：
 1. updateParagraph - 在Word文档中插入新段落（参数：text）
 2. insertFormattedText - 在Word文档中插入格式化文本（参数：text, bold, italic, underline）
 3. replaceCurrentWord - 替换Word文档中选中的文本（参数：text）
 4. updateSpreadsheet - 更新Excel单元格内容（参数：cell, value, bold）
 5. updatePresentation - 更新PowerPoint幻灯片内容（参数：slideIndex, text）
 
-${mcpTools.length > 0 ? `\nMCP工具（额外功能）：\n${mcpTools.map((t, i) => `${i + 6}. ${t.function.name} - ${t.function.description}`).join('\n')}\n` : ''}
+【文件存储工具】（默认工作空间：${selectedWorkspace || '根目录'}）：
+6. getFileList - 获取文件列表（参数：folder[可选]）
+7. downloadFile - 获取文件下载URL（参数：filename, folder[可选]）
+8. createFile - 创建新文件（参数：type, filename, folder[可选]）
+9. deleteFile - 删除文件（参数：filename, folder[可选]）
+10. renameFile - 重命名文件（参数：oldFilename, newName, folder[可选]）
+11. getFolderList - 获取所有文件夹列表
+
+${mcpTools.length > 0 ? `【MCP工具】（额外功能）：\n${mcpTools.map((t, i) => `${i + 12}. ${t.function.name} - ${t.function.description}`).join('\n')}\n` : ''}
 使用指南：
-- 当用户要求编辑文档时，主动调用相应的工具
-- 根据用户的具体需求选择合适的工具和参数
-- 如果用户没有明确指定参数，使用合理的默认值
+- 当用户要求编辑文档时，主动调用文档编辑工具
+- 当用户询问文件或要求文件操作时，调用文件存储工具
+- 如果用户没有指定folder参数，存储工具会自动使用当前工作空间：${selectedWorkspace || '根目录'}
+- downloadFile 工具返回的URL可以直接用于下载或传递给其他系统
 - MCP工具提供了额外的业务流程功能，根据需求选择合适的工具
 - 用中文回复，保持专业和友好的语气`
               : '你是一个有帮助的AI助手。用中文回复。'
@@ -187,9 +198,13 @@ ${mcpTools.length > 0 ? `\nMCP工具（额外功能）：\n${mcpTools.map((t, i)
       };
 
       // Add tools if agent mode is enabled
-      if (mode === 'agent' && isEditorReady) {
-        // Combine document tools and MCP tools
-        const allTools = [...documentTools, ...mcpTools];
+      if (mode === 'agent') {
+        // Combine document tools (only if editor ready), storage tools, and MCP tools
+        const allTools = [
+          ...(isEditorReady ? documentTools : []),
+          ...storageTools,
+          ...mcpTools
+        ];
         apiConfig.tools = allTools;
         apiConfig.tool_choice = 'auto';
       }
@@ -222,6 +237,8 @@ ${mcpTools.length > 0 ? `\nMCP工具（额外功能）：\n${mcpTools.map((t, i)
             
             // Check if this is an MCP tool
             const mcpTool = mcpTools.find(t => t.function.name === functionName);
+            // Check if this is a storage tool
+            const storageTool = storageTools.find(t => t.function.name === functionName);
             
             if (mcpTool && mcpTool._mcpClientKey) {
               // Execute MCP tool using the correct client instance
@@ -238,6 +255,11 @@ ${mcpTools.length > 0 ? `\nMCP工具（额外功能）：\n${mcpTools.map((t, i)
               });
               result = await EngineMCP.callTool(client, functionName, functionArgs, addMcpLog);
               addMcpLog('success', `MCP 工具执行完成: ${functionName}`, result);
+            } else if (storageTool) {
+              // Execute storage tool
+              console.log('📁 Executing storage tool:', functionName);
+              result = await executeStorageToolCall(functionName, functionArgs, selectedWorkspace);
+              console.log('📁 Storage tool result:', result);
             } else {
               // Execute document tool
               console.log('📝 About to execute tool with editor:', docEditor);

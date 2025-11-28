@@ -41,36 +41,41 @@ class EngineMCP {
           }
         });
 
-        // 先尝试从响应头获取 session ID（某些服务器即使返回 400 也会设置此头）
+        // 调试：打印所有可访问的响应头
+        const headers = {};
+        response.headers.forEach((value, key) => {
+          headers[key] = value;
+        });
+        this.log('debug', '浏览器可访问的响应头', headers);
+
+        // 尝试从响应头获取 session ID
+        // 注意：服务器必须在 Access-Control-Expose-Headers 中暴露 mcp-session-id
         this.sessionId = response.headers.get('mcp-session-id');
         
         if (!this.sessionId) {
-          // 如果没有 session ID 且响应不OK，抛出错误
+          // 如果浏览器无法读取 mcp-session-id 响应头
+          this.log('error', '❌ 无法读取 mcp-session-id 响应头');
+          this.log('error', '可能原因：服务器未在 Access-Control-Expose-Headers 中暴露该头');
+          this.log('error', '服务器需要添加: Access-Control-Expose-Headers: mcp-session-id');
+          
+          // 如果没有 session ID，抛出错误
+          let errorDetail = '';
           if (!response.ok) {
-            let errorDetail = '';
             try {
               const errorText = await response.text();
               errorDetail = errorText ? `: ${errorText}` : '';
             } catch (e) {
               // 忽略读取错误体的失败
             }
-            throw new Error(`Failed to get session: ${response.status} ${response.statusText}${errorDetail}`);
           }
-          
-          // 打印所有响应头用于调试
-          const headers = {};
-          response.headers.forEach((value, key) => {
-            headers[key] = value;
-          });
-          this.log('debug', '响应头', headers);
-          throw new Error('Server did not return mcp-session-id header');
+          throw new Error(`无法获取 session ID。服务器需要在 CORS 配置中暴露 'mcp-session-id' 响应头。响应: ${response.status} ${response.statusText}${errorDetail}`);
         }
 
-        this.log('success', `获得 Session ID: ${this.sessionId}`);
+        this.log('success', `✅ 获得 Session ID: ${this.sessionId}`);
         
-        // 如果响应不OK但有session ID，记录警告但继续（某些服务器的特殊行为）
+        // MCP 服务器在首次 GET 请求时会返回 400 + session ID，这是正常行为
         if (!response.ok) {
-          this.log('warn', `服务器返回 ${response.status}，但提供了 session ID，尝试继续`);
+          this.log('info', `服务器返回 ${response.status}，但已成功获取 session ID`);
         }
         
         return this.sessionId;
